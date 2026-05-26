@@ -1,15 +1,19 @@
 package com.haohancom.docimagestripper.service;
 
 import java.awt.Color;
+import java.awt.image.BufferedImage;
 import java.awt.geom.Point2D;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+
+import javax.imageio.ImageIO;
 
 import org.apache.pdfbox.contentstream.PDContentStream;
 import org.apache.pdfbox.contentstream.PDFStreamEngine;
@@ -35,6 +39,8 @@ import org.apache.pdfbox.pdmodel.font.PDFont;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
 import org.apache.pdfbox.pdmodel.graphics.form.PDFormXObject;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImage;
+import org.apache.pdfbox.pdmodel.graphics.image.PDInlineImage;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.util.Matrix;
 import org.springframework.stereotype.Service;
@@ -46,7 +52,7 @@ public class PdfImagePlaceholderService {
     private static final float MAX_FONT_SIZE = 14f;
     private static final float MIN_FONT_SIZE = 4f;
 
-    public byte[] replaceImages(byte[] input) throws IOException {
+    public Result replaceImages(byte[] input) throws IOException {
         if (input == null || input.length == 0) {
             throw new IllegalArgumentException("PDF file must not be empty.");
         }
@@ -54,12 +60,14 @@ public class PdfImagePlaceholderService {
         try (PDDocument document = PDDocument.load(input)) {
             int nextImageNumber = 1;
             List<PagePlaceholders> pagePlaceholders = new ArrayList<PagePlaceholders>();
+            List<ExtractedImage> extractedImages = new ArrayList<ExtractedImage>();
             for (PDPage page : document.getPages()) {
                 ImagePositionCollector collector = new ImagePositionCollector(nextImageNumber);
                 collector.processPage(page);
                 List<ImagePlaceholder> placeholders = collector.getPlaceholders();
                 pagePlaceholders.add(new PagePlaceholders(page, placeholders));
                 nextImageNumber += placeholders.size();
+                extractedImages.addAll(collector.getExtractedImages());
             }
 
             for (PagePlaceholders placeholders : pagePlaceholders) {
@@ -71,8 +79,15 @@ public class PdfImagePlaceholderService {
 
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             document.save(output);
-            return output.toByteArray();
+            return new Result(output.toByteArray(), extractedImages);
         }
+    }
+
+    private static byte[] toPngBytes(PDImage image) throws IOException {
+        BufferedImage bufferedImage = image.getImage();
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        ImageIO.write(bufferedImage, "png", output);
+        return output.toByteArray();
     }
 
     private void removeImageDraws(PDDocument document, PDPage page, Set<COSBase> visitedForms) throws IOException {
@@ -194,6 +209,7 @@ public class PdfImagePlaceholderService {
 
     private static class ImagePositionCollector extends PDFStreamEngine {
         private final List<ImagePlaceholder> placeholders = new ArrayList<ImagePlaceholder>();
+        private final List<ExtractedImage> extractedImages = new ArrayList<ExtractedImage>();
         private int nextImageNumber;
 
         ImagePositionCollector(int startImageNumber) throws IOException {
@@ -210,11 +226,17 @@ public class PdfImagePlaceholderService {
             return placeholders;
         }
 
+        List<ExtractedImage> getExtractedImages() {
+            return extractedImages;
+        }
+
         @Override
         protected void processOperator(Operator operator, List<COSBase> operands) throws IOException {
             if (OperatorName.BEGIN_INLINE_IMAGE.equals(operator.getName()) && operator.getImageData() != null
                     && operator.getImageData().length > 0) {
-                placeholders.add(toPlaceholder(getGraphicsState().getCurrentTransformationMatrix()));
+                PDInlineImage image = new PDInlineImage(operator.getImageParameters(), operator.getImageData(),
+                        getResources());
+                addImage(image, getGraphicsState().getCurrentTransformationMatrix());
                 return;
             }
             if (OperatorName.DRAW_OBJECT.equals(operator.getName()) && !operands.isEmpty()
@@ -222,7 +244,7 @@ public class PdfImagePlaceholderService {
                 COSName objectName = (COSName) operands.get(0);
                 PDXObject xObject = getResources().getXObject(objectName);
                 if (xObject instanceof PDImageXObject) {
-                    placeholders.add(toPlaceholder(getGraphicsState().getCurrentTransformationMatrix()));
+                    addImage((PDImageXObject) xObject, getGraphicsState().getCurrentTransformationMatrix());
                     return;
                 }
                 if (xObject instanceof PDFormXObject) {
@@ -233,7 +255,14 @@ public class PdfImagePlaceholderService {
             super.processOperator(operator, operands);
         }
 
-        private ImagePlaceholder toPlaceholder(Matrix matrix) {
+        private void addImage(PDImage image, Matrix matrix) throws IOException {
+            int imageNumber = nextImageNumber;
+            placeholders.add(toPlaceholder(matrix, imageNumber));
+            extractedImages.add(new ExtractedImage("image" + imageNumber + ".png", "image/png", toPngBytes(image)));
+            nextImageNumber++;
+        }
+
+        private ImagePlaceholder toPlaceholder(Matrix matrix, int imageNumber) {
             List<Point2D.Float> points = Arrays.asList(
                     matrix.transformPoint(0, 0),
                     matrix.transformPoint(1, 0),
@@ -251,13 +280,54 @@ public class PdfImagePlaceholderService {
                 maxY = Math.max(maxY, point.y);
             }
 
-            ImagePlaceholder placeholder = new ImagePlaceholder("[image" + nextImageNumber + "]",
+            ImagePlaceholder placeholder = new ImagePlaceholder("[image" + imageNumber + "]",
                     minX,
                     minY,
                     Math.max(1f, maxX - minX),
                     Math.max(1f, maxY - minY));
-            nextImageNumber++;
             return placeholder;
+        }
+    }
+
+    public static class Result {
+        private final byte[] pdfBytes;
+        private final List<ExtractedImage> extractedImages;
+
+        public Result(byte[] pdfBytes, List<ExtractedImage> extractedImages) {
+            this.pdfBytes = Arrays.copyOf(pdfBytes, pdfBytes.length);
+            this.extractedImages = Collections.unmodifiableList(new ArrayList<ExtractedImage>(extractedImages));
+        }
+
+        public byte[] getPdfBytes() {
+            return Arrays.copyOf(pdfBytes, pdfBytes.length);
+        }
+
+        public List<ExtractedImage> getExtractedImages() {
+            return extractedImages;
+        }
+    }
+
+    public static class ExtractedImage {
+        private final String filename;
+        private final String contentType;
+        private final byte[] bytes;
+
+        public ExtractedImage(String filename, String contentType, byte[] bytes) {
+            this.filename = filename;
+            this.contentType = contentType;
+            this.bytes = Arrays.copyOf(bytes, bytes.length);
+        }
+
+        public String getFilename() {
+            return filename;
+        }
+
+        public String getContentType() {
+            return contentType;
+        }
+
+        public byte[] getBytes() {
+            return Arrays.copyOf(bytes, bytes.length);
         }
     }
 

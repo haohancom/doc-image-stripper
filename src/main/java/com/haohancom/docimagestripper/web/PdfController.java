@@ -1,9 +1,13 @@
 package com.haohancom.docimagestripper.web;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 import com.haohancom.docimagestripper.service.PdfImagePlaceholderService;
+import com.haohancom.docimagestripper.service.PdfImagePlaceholderService.ExtractedImage;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -29,20 +33,22 @@ public class PdfController {
     }
 
     @PostMapping(value = "/replace-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
-            produces = MediaType.APPLICATION_PDF_VALUE)
+            produces = "application/zip")
     public ResponseEntity<byte[]> replaceImages(@RequestParam("file") MultipartFile file) throws IOException {
         validatePdf(file);
 
-        byte[] processedPdf = service.replaceImages(file.getBytes());
-        String outputFileName = outputFileName(file.getOriginalFilename());
+        PdfImagePlaceholderService.Result result = service.replaceImages(file.getBytes());
+        String pdfFileName = pdfOutputFileName(file.getOriginalFilename());
+        String zipFileName = zipOutputFileName(file.getOriginalFilename());
+        byte[] zipBytes = toZip(result, pdfFileName);
 
         return ResponseEntity.ok()
-                .contentType(MediaType.APPLICATION_PDF)
+                .contentType(MediaType.parseMediaType("application/zip"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
-                        .filename(outputFileName, StandardCharsets.UTF_8)
+                        .filename(zipFileName, StandardCharsets.UTF_8)
                         .build()
                         .toString())
-                .body(processedPdf);
+                .body(zipBytes);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -72,7 +78,23 @@ public class PdfController {
         }
     }
 
-    private String outputFileName(String originalFilename) {
+    private byte[] toZip(PdfImagePlaceholderService.Result result, String pdfFileName) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            zip.putNextEntry(new ZipEntry(pdfFileName));
+            zip.write(result.getPdfBytes());
+            zip.closeEntry();
+
+            for (ExtractedImage image : result.getExtractedImages()) {
+                zip.putNextEntry(new ZipEntry(image.getFilename()));
+                zip.write(image.getBytes());
+                zip.closeEntry();
+            }
+        }
+        return output.toByteArray();
+    }
+
+    private String pdfOutputFileName(String originalFilename) {
         String filename = originalFilename == null || originalFilename.trim().isEmpty()
                 ? "converted.pdf"
                 : originalFilename.trim();
@@ -81,5 +103,16 @@ public class PdfController {
             return filename.substring(0, extensionIndex) + "-replaced.pdf";
         }
         return filename + "-replaced.pdf";
+    }
+
+    private String zipOutputFileName(String originalFilename) {
+        String filename = originalFilename == null || originalFilename.trim().isEmpty()
+                ? "converted.pdf"
+                : originalFilename.trim();
+        int extensionIndex = filename.toLowerCase().lastIndexOf(".pdf");
+        if (extensionIndex > 0) {
+            return filename.substring(0, extensionIndex) + "-replaced.zip";
+        }
+        return filename + "-replaced.zip";
     }
 }

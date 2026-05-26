@@ -8,7 +8,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.io.ByteArrayInputStream;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.nio.charset.StandardCharsets;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
 
 import com.haohancom.docimagestripper.service.PdfImagePlaceholderService;
 import org.junit.jupiter.api.Test;
@@ -30,9 +35,13 @@ class PdfControllerTest {
     private PdfImagePlaceholderService service;
 
     @Test
-    void uploadsPdfAndReturnsProcessedPdfDownload() throws Exception {
+    void uploadsPdfAndReturnsProcessedZipDownload() throws Exception {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
-        given(service.replaceImages(any(byte[].class))).willReturn(processedPdf);
+        byte[] image = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
+        given(service.replaceImages(any(byte[].class))).willReturn(new PdfImagePlaceholderService.Result(
+                processedPdf,
+                java.util.Collections.singletonList(
+                        new PdfImagePlaceholderService.ExtractedImage("image1.png", "image/png", image))));
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "sample.pdf",
@@ -41,15 +50,24 @@ class PdfControllerTest {
 
         mockMvc.perform(multipart("/api/pdf/replace-images").file(file))
                 .andExpect(status().isOk())
-                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("sample-replaced.pdf")))
-                .andExpect(content().contentType(MediaType.APPLICATION_PDF))
-                .andExpect(content().bytes(processedPdf));
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("sample-replaced.zip")))
+                .andExpect(content().contentType("application/zip"))
+                .andExpect(result -> {
+                    Map<String, byte[]> entries = unzip(result.getResponse().getContentAsByteArray());
+                    org.assertj.core.api.Assertions.assertThat(entries).containsOnlyKeys(
+                            "sample-replaced.pdf", "image1.png");
+                    org.assertj.core.api.Assertions.assertThat(entries.get("sample-replaced.pdf"))
+                            .isEqualTo(processedPdf);
+                    org.assertj.core.api.Assertions.assertThat(entries.get("image1.png")).isEqualTo(image);
+                });
     }
 
     @Test
     void allowsUploadsFromDoubleClickedStaticPage() throws Exception {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
-        given(service.replaceImages(any(byte[].class))).willReturn(processedPdf);
+        given(service.replaceImages(any(byte[].class))).willReturn(new PdfImagePlaceholderService.Result(
+                processedPdf,
+                java.util.Collections.emptyList()));
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "sample.pdf",
@@ -61,5 +79,17 @@ class PdfControllerTest {
                         .header(HttpHeaders.ORIGIN, "null"))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*"));
+    }
+
+    private Map<String, byte[]> unzip(byte[] zipBytes) throws Exception {
+        Map<String, byte[]> entries = new LinkedHashMap<String, byte[]>();
+        try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            ZipEntry entry = zip.getNextEntry();
+            while (entry != null) {
+                entries.put(entry.getName(), org.springframework.util.StreamUtils.copyToByteArray(zip));
+                entry = zip.getNextEntry();
+            }
+        }
+        return entries;
     }
 }

@@ -265,7 +265,7 @@
                 <div class="drop-content">
                     <div class="file-mark">PDF</div>
                     <h1>把 PDF 丢进来</h1>
-                    <p class="hint">图片会按出现顺序变成 [image1]、[image2]。</p>
+                    <p class="hint">图片会变成 [image1]、[image2]，并随 PDF 一起打包下载。</p>
                     <div class="button-row">
                         <button class="primary" type="button" id="pickButton">选择 PDF</button>
                         <button class="secondary" type="button" id="downloadButton" disabled>重新下载</button>
@@ -325,7 +325,7 @@
         if (plainMatch) {
             return plainMatch[1];
         }
-        return fallbackName.replace(/\.pdf$/i, '') + '-replaced.pdf';
+        return fallbackName.replace(/\.pdf$/i, '') + '-replaced.zip';
     };
 
     const triggerDownload = (url, name) => {
@@ -376,7 +376,7 @@
             triggerDownload(lastDownloadUrl, lastDownloadName);
 
             state.textContent = '已完成';
-            setMessage('处理完成，已下载 ' + lastDownloadName, false, true);
+            setMessage('处理完成，已下载压缩包 ' + lastDownloadName, false, true);
             downloadButton.disabled = false;
         } catch (error) {
             state.textContent = '失败';

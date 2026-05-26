@@ -38,9 +38,15 @@ class PdfImagePlaceholderServiceTest {
     void replacesImageWithNumberedPlaceholderWhileKeepingText() throws Exception {
         byte[] input = createPdfWithOneImage();
 
-        byte[] output = service.replaceImages(input);
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
 
-        try (PDDocument document = PDDocument.load(output)) {
+        assertThat(result.getExtractedImages()).hasSize(1);
+        assertThat(result.getExtractedImages().get(0).getFilename()).isEqualTo("image1.png");
+        assertThat(result.getExtractedImages().get(0).getContentType()).isEqualTo("image/png");
+        assertThat(result.getExtractedImages().get(0).getBytes()).startsWith(
+                (byte) 0x89, (byte) 'P', (byte) 'N', (byte) 'G');
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("Original Title");
             assertThat(text).contains("Body text stays here.");
@@ -53,9 +59,12 @@ class PdfImagePlaceholderServiceTest {
     void replacesImageNestedInsideFormXObject() throws Exception {
         byte[] input = createPdfWithImageInsideForm();
 
-        byte[] output = service.replaceImages(input);
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
 
-        try (PDDocument document = PDDocument.load(output)) {
+        assertThat(result.getExtractedImages()).extracting(PdfImagePlaceholderService.ExtractedImage::getFilename)
+                .containsExactly("image1.png");
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("Form wrapped image");
             assertThat(text).contains("[image1]");
@@ -67,9 +76,12 @@ class PdfImagePlaceholderServiceTest {
     void replacesEveryUseOfAReusedFormImage() throws Exception {
         byte[] input = createPdfWithSharedFormOnTwoPages();
 
-        byte[] output = service.replaceImages(input);
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
 
-        try (PDDocument document = PDDocument.load(output)) {
+        assertThat(result.getExtractedImages()).extracting(PdfImagePlaceholderService.ExtractedImage::getFilename)
+                .containsExactly("image1.png", "image2.png");
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("[image1]");
             assertThat(text).contains("[image2]");
@@ -82,9 +94,12 @@ class PdfImagePlaceholderServiceTest {
     void replacesInlineImages() throws Exception {
         byte[] input = createPdfWithInlineImage();
 
-        byte[] output = service.replaceImages(input);
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
 
-        try (PDDocument document = PDDocument.load(output)) {
+        assertThat(result.getExtractedImages()).extracting(PdfImagePlaceholderService.ExtractedImage::getFilename)
+                .containsExactly("image1.png");
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("Inline image");
             assertThat(text).contains("[image1]");
