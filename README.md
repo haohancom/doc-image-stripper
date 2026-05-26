@@ -11,7 +11,8 @@ Doc Image Stripper is a Java 8 Spring Boot service for removing images from docu
 ## Current Status
 
 - PDF upload and processing is implemented.
-- PDF images are replaced with numbered placeholders such as `[image1]`, `[image2]`.
+- PDF images are replaced with numbered placeholders such as `image1`, `image2`.
+- Placeholder left and right text can be customized with `placeholderPrefix` and `placeholderSuffix`.
 - Processed downloads are ZIP archives containing the replaced PDF and extracted PNG images named `image1.png`, `image2.png`, and so on.
 - The PDF processor handles normal image XObjects, nested Form XObjects, and inline images.
 - Word document support is part of the project goal and can be added next.

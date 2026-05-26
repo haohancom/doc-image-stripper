@@ -52,8 +52,22 @@ class PdfImagePlaceholderServiceTest {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("Original Title");
             assertThat(text).contains("Body text stays here.");
-            assertThat(text).contains("[image1]");
+            assertThat(text).contains("image1");
+            assertThat(text).doesNotContain("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
+        }
+    }
+
+    @Test
+    void wrapsPlaceholdersWithCustomPrefixAndSuffix() throws Exception {
+        byte[] input = createPdfWithOneImage();
+
+        PdfImagePlaceholderService.Result result = service.replaceImages(input, "-", "!");
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("-image1!");
+            assertThat(text).doesNotContain("[image1]");
         }
     }
 
@@ -69,7 +83,8 @@ class PdfImagePlaceholderServiceTest {
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("Form wrapped image");
-            assertThat(text).contains("[image1]");
+            assertThat(text).contains("image1");
+            assertThat(text).doesNotContain("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
         }
     }
@@ -85,8 +100,10 @@ class PdfImagePlaceholderServiceTest {
 
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
-            assertThat(text).contains("[image1]");
-            assertThat(text).contains("[image2]");
+            assertThat(text).contains("image1");
+            assertThat(text).contains("image2");
+            assertThat(text).doesNotContain("[image1]");
+            assertThat(text).doesNotContain("[image2]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
             assertThat(countImageDraws(document.getPage(1))).isZero();
         }
@@ -104,7 +121,8 @@ class PdfImagePlaceholderServiceTest {
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
             assertThat(text).contains("Inline image");
-            assertThat(text).contains("[image1]");
+            assertThat(text).contains("image1");
+            assertThat(text).doesNotContain("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
         }
     }
@@ -117,7 +135,8 @@ class PdfImagePlaceholderServiceTest {
 
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
-            assertThat(text).contains("[image1]");
+            assertThat(text).contains("image1");
+            assertThat(text).doesNotContain("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
             assertThat(countStrokedRectangles(document.getPage(0), 72, 620, 80, 50)).isZero();
         }
@@ -131,7 +150,8 @@ class PdfImagePlaceholderServiceTest {
 
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
-            assertThat(text).contains("[image1]");
+            assertThat(text).contains("image1");
+            assertThat(text).doesNotContain("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
             assertThat(countLinePathRectangles(document.getPage(0), 72, 620, 80, 50)).isZero();
         }
@@ -145,7 +165,8 @@ class PdfImagePlaceholderServiceTest {
 
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
-            assertThat(text).contains("[image1]");
+            assertThat(text).contains("image1");
+            assertThat(text).doesNotContain("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
             assertThat(countStrokedRectangles(document.getPage(0), 0, 0, 80, 50)).isZero();
         }
@@ -159,8 +180,10 @@ class PdfImagePlaceholderServiceTest {
 
         try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
             String text = new PDFTextStripper().getText(document);
-            assertThat(text).contains("[image1]");
-            assertThat(text).contains("[image2]");
+            assertThat(text).contains("image1");
+            assertThat(text).contains("image2");
+            assertThat(text).doesNotContain("[image1]");
+            assertThat(text).doesNotContain("[image2]");
             assertThat(fontSizes(document.getPage(0))).containsExactly(18f, 18f);
         }
     }

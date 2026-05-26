@@ -54,16 +54,22 @@ public class PdfImagePlaceholderService {
     private static final float MAX_BORDER_PADDING = 8f;
 
     public Result replaceImages(byte[] input) throws IOException {
+        return replaceImages(input, "", "");
+    }
+
+    public Result replaceImages(byte[] input, String placeholderPrefix, String placeholderSuffix) throws IOException {
         if (input == null || input.length == 0) {
             throw new IllegalArgumentException("PDF file must not be empty.");
         }
 
+        String prefix = placeholderPart(placeholderPrefix);
+        String suffix = placeholderPart(placeholderSuffix);
         try (PDDocument document = PDDocument.load(input)) {
             int nextImageNumber = 1;
             List<PagePlaceholders> pagePlaceholders = new ArrayList<PagePlaceholders>();
             List<ExtractedImage> extractedImages = new ArrayList<ExtractedImage>();
             for (PDPage page : document.getPages()) {
-                ImagePositionCollector collector = new ImagePositionCollector(nextImageNumber);
+                ImagePositionCollector collector = new ImagePositionCollector(nextImageNumber, prefix, suffix);
                 collector.processPage(page);
                 List<ImagePlaceholder> placeholders = collector.getPlaceholders();
                 pagePlaceholders.add(new PagePlaceholders(page, placeholders));
@@ -83,6 +89,10 @@ public class PdfImagePlaceholderService {
             document.save(output);
             return new Result(output.toByteArray(), extractedImages);
         }
+    }
+
+    private String placeholderPart(String value) {
+        return value == null ? "" : value;
     }
 
     private static byte[] toPngBytes(PDImage image) throws IOException {
@@ -396,15 +406,29 @@ public class PdfImagePlaceholderService {
         private final List<ImagePlaceholder> placeholders = new ArrayList<ImagePlaceholder>();
         private final List<ExtractedImage> extractedImages = new ArrayList<ExtractedImage>();
         private final boolean extractImages;
+        private final String placeholderPrefix;
+        private final String placeholderSuffix;
         private int nextImageNumber;
 
         ImagePositionCollector(int startImageNumber) throws IOException {
-            this(startImageNumber, true);
+            this(startImageNumber, true, "", "");
+        }
+
+        ImagePositionCollector(int startImageNumber, String placeholderPrefix, String placeholderSuffix)
+                throws IOException {
+            this(startImageNumber, true, placeholderPrefix, placeholderSuffix);
         }
 
         ImagePositionCollector(int startImageNumber, boolean extractImages) throws IOException {
+            this(startImageNumber, extractImages, "", "");
+        }
+
+        ImagePositionCollector(int startImageNumber, boolean extractImages, String placeholderPrefix,
+                String placeholderSuffix) throws IOException {
             this.nextImageNumber = startImageNumber;
             this.extractImages = extractImages;
+            this.placeholderPrefix = placeholderPrefix;
+            this.placeholderSuffix = placeholderSuffix;
             addOperator(new Concatenate());
             addOperator(new DrawObject());
             addOperator(new SetGraphicsStateParameters());
@@ -474,7 +498,8 @@ public class PdfImagePlaceholderService {
                 maxY = Math.max(maxY, point.y);
             }
 
-            ImagePlaceholder placeholder = new ImagePlaceholder("[image" + imageNumber + "]",
+            ImagePlaceholder placeholder = new ImagePlaceholder(placeholderPrefix + "image" + imageNumber
+                    + placeholderSuffix,
                     minX,
                     minY,
                     Math.max(1f, maxX - minX),

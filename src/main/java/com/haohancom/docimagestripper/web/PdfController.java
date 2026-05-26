@@ -34,10 +34,13 @@ public class PdfController {
 
     @PostMapping(value = "/replace-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = "application/zip")
-    public ResponseEntity<byte[]> replaceImages(@RequestParam("file") MultipartFile file) throws IOException {
+    public ResponseEntity<byte[]> replaceImages(@RequestParam("file") MultipartFile file,
+            @RequestParam(value = "placeholderPrefix", required = false) String placeholderPrefix,
+            @RequestParam(value = "placeholderSuffix", required = false) String placeholderSuffix) throws IOException {
         validatePdf(file);
 
-        PdfImagePlaceholderService.Result result = service.replaceImages(file.getBytes());
+        PdfImagePlaceholderService.Result result = service.replaceImages(file.getBytes(),
+                placeholderPart(placeholderPrefix), placeholderPart(placeholderSuffix));
         String pdfFileName = pdfOutputFileName(file.getOriginalFilename());
         String zipFileName = zipOutputFileName(file.getOriginalFilename());
         byte[] zipBytes = toZip(result, pdfFileName);
@@ -76,6 +79,10 @@ public class PdfController {
         if (!hasPdfExtension && !hasPdfContentType) {
             throw new IllegalArgumentException("Only PDF files are supported.");
         }
+    }
+
+    private String placeholderPart(String value) {
+        return value == null ? "" : value;
     }
 
     private byte[] toZip(PdfImagePlaceholderService.Result result, String pdfFileName) throws IOException {

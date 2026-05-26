@@ -2,7 +2,9 @@ package com.haohancom.docimagestripper.web;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -38,7 +40,8 @@ class PdfControllerTest {
     void uploadsPdfAndReturnsProcessedZipDownload() throws Exception {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
         byte[] image = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
-        given(service.replaceImages(any(byte[].class))).willReturn(new PdfImagePlaceholderService.Result(
+        given(service.replaceImages(any(byte[].class), any(String.class), any(String.class)))
+                .willReturn(new PdfImagePlaceholderService.Result(
                 processedPdf,
                 java.util.Collections.singletonList(
                         new PdfImagePlaceholderService.ExtractedImage("image1.png", "image/png", image))));
@@ -60,12 +63,36 @@ class PdfControllerTest {
                             .isEqualTo(processedPdf);
                     org.assertj.core.api.Assertions.assertThat(entries.get("image1.png")).isEqualTo(image);
                 });
+        verify(service).replaceImages(any(byte[].class), eq(""), eq(""));
+    }
+
+    @Test
+    void passesCustomPlaceholderDelimitersToPdfService() throws Exception {
+        byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
+        given(service.replaceImages(any(byte[].class), any(String.class), any(String.class)))
+                .willReturn(new PdfImagePlaceholderService.Result(
+                        processedPdf,
+                        java.util.Collections.emptyList()));
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "sample.pdf",
+                MediaType.APPLICATION_PDF_VALUE,
+                "input pdf".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/pdf/replace-images")
+                        .file(file)
+                        .param("placeholderPrefix", "-")
+                        .param("placeholderSuffix", "!"))
+                .andExpect(status().isOk());
+
+        verify(service).replaceImages(any(byte[].class), eq("-"), eq("!"));
     }
 
     @Test
     void allowsUploadsFromDoubleClickedStaticPage() throws Exception {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
-        given(service.replaceImages(any(byte[].class))).willReturn(new PdfImagePlaceholderService.Result(
+        given(service.replaceImages(any(byte[].class), any(String.class), any(String.class)))
+                .willReturn(new PdfImagePlaceholderService.Result(
                 processedPdf,
                 java.util.Collections.emptyList()));
         MockMultipartFile file = new MockMultipartFile(

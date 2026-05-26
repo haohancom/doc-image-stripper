@@ -156,6 +156,38 @@
             flex-wrap: wrap;
         }
 
+        .placeholder-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin: 0 0 20px;
+            text-align: left;
+        }
+
+        .placeholder-field {
+            display: grid;
+            gap: 6px;
+            color: var(--muted);
+            font-size: 13px;
+            font-weight: 700;
+        }
+
+        .placeholder-field input {
+            width: 100%;
+            height: 40px;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            padding: 0 12px;
+            color: var(--ink);
+            font: inherit;
+            background: #ffffff;
+        }
+
+        .placeholder-field input:focus {
+            outline: 3px solid rgba(15, 123, 104, 0.18);
+            border-color: var(--accent);
+        }
+
         button {
             height: 42px;
             border: 1px solid transparent;
@@ -246,6 +278,10 @@
                 flex-direction: column;
             }
 
+            .placeholder-row {
+                grid-template-columns: 1fr;
+            }
+
             .message {
                 text-align: left;
             }
@@ -265,7 +301,19 @@
                 <div class="drop-content">
                     <div class="file-mark">PDF</div>
                     <h1>把 PDF 丢进来</h1>
-                    <p class="hint">图片会变成 [image1]、[image2]，并随 PDF 一起打包下载。</p>
+                    <p class="hint">图片会变成 image1、image2，并随 PDF 一起打包下载。</p>
+                    <div class="placeholder-row" aria-label="占位符设置">
+                        <label class="placeholder-field" for="placeholderPrefix">
+                            <span>左侧占位符</span>
+                            <input type="text" id="placeholderPrefix" name="placeholderPrefix" autocomplete="off"
+                                   placeholder="例如 -">
+                        </label>
+                        <label class="placeholder-field" for="placeholderSuffix">
+                            <span>右侧占位符</span>
+                            <input type="text" id="placeholderSuffix" name="placeholderSuffix" autocomplete="off"
+                                   placeholder="例如 !">
+                        </label>
+                    </div>
                     <div class="button-row">
                         <button class="primary" type="button" id="pickButton">选择 PDF</button>
                         <button class="secondary" type="button" id="downloadButton" disabled>重新下载</button>
@@ -288,6 +336,8 @@
     const fileInput = document.getElementById('fileInput');
     const pickButton = document.getElementById('pickButton');
     const downloadButton = document.getElementById('downloadButton');
+    const placeholderPrefix = document.getElementById('placeholderPrefix');
+    const placeholderSuffix = document.getElementById('placeholderSuffix');
     const filename = document.getElementById('filename');
     const message = document.getElementById('message');
     const state = document.getElementById('state');
@@ -358,6 +408,8 @@
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('placeholderPrefix', placeholderPrefix.value);
+        formData.append('placeholderSuffix', placeholderSuffix.value);
 
         try {
             const response = await fetch(API_BASE + '/api/pdf/replace-images', {
@@ -436,11 +488,14 @@
         openPicker();
     });
     dropZone.addEventListener('click', (event) => {
-        if (!event.target.closest('button')) {
+        if (!event.target.closest('button, input, label')) {
             openPicker();
         }
     });
     dropZone.addEventListener('keydown', (event) => {
+        if (event.target.closest('button, input')) {
+            return;
+        }
         if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             openPicker();
