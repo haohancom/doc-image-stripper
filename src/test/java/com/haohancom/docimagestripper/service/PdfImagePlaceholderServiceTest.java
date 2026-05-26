@@ -13,6 +13,7 @@ import org.apache.pdfbox.contentstream.operator.Operator;
 import org.apache.pdfbox.contentstream.operator.OperatorName;
 import org.apache.pdfbox.cos.COSDictionary;
 import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSNumber;
 import org.apache.pdfbox.pdfparser.PDFStreamParser;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -104,6 +105,48 @@ class PdfImagePlaceholderServiceTest {
             assertThat(text).contains("Inline image");
             assertThat(text).contains("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
+        }
+    }
+
+    @Test
+    void removesSimpleBorderAroundReplacedImageSoPlaceholderStaysAsText() throws Exception {
+        byte[] input = createPdfWithImageAndMatchingBorder();
+
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("[image1]");
+            assertThat(countImageDraws(document.getPage(0))).isZero();
+            assertThat(countStrokedRectangles(document.getPage(0), 72, 620, 80, 50)).isZero();
+        }
+    }
+
+    @Test
+    void removesLinePathBorderAroundReplacedImageSoPlaceholderStaysAsText() throws Exception {
+        byte[] input = createPdfWithImageAndLinePathBorder();
+
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("[image1]");
+            assertThat(countImageDraws(document.getPage(0))).isZero();
+            assertThat(countLinePathRectangles(document.getPage(0), 72, 620, 80, 50)).isZero();
+        }
+    }
+
+    @Test
+    void removesBorderInsideFormXObjectAroundReplacedImage() throws Exception {
+        byte[] input = createPdfWithBorderedImageInsideForm();
+
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("[image1]");
+            assertThat(countImageDraws(document.getPage(0))).isZero();
+            assertThat(countStrokedRectangles(document.getPage(0), 0, 0, 80, 50)).isZero();
         }
     }
 
@@ -233,6 +276,95 @@ class PdfImagePlaceholderServiceTest {
         }
     }
 
+    private byte[] createPdfWithImageAndMatchingBorder() throws Exception {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+
+            PDImageXObject image = LosslessFactory.createFromImage(document, solidImage(80, 50, Color.RED));
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(PDType1Font.HELVETICA, 12);
+                content.newLineAtOffset(72, 720);
+                content.showText("Image with border");
+                content.endText();
+
+                content.drawImage(image, 72, 620, 80, 50);
+                content.addRect(72, 620, 80, 50);
+                content.stroke();
+            }
+
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private byte[] createPdfWithImageAndLinePathBorder() throws Exception {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+
+            PDImageXObject image = LosslessFactory.createFromImage(document, solidImage(80, 50, Color.RED));
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(PDType1Font.HELVETICA, 12);
+                content.newLineAtOffset(72, 720);
+                content.showText("Image with line border");
+                content.endText();
+
+                content.drawImage(image, 72, 620, 80, 50);
+                content.moveTo(72, 620);
+                content.lineTo(152, 620);
+                content.lineTo(152, 670);
+                content.lineTo(72, 670);
+                content.closePath();
+                content.stroke();
+            }
+
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
+    private byte[] createPdfWithBorderedImageInsideForm() throws Exception {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+
+            PDImageXObject image = LosslessFactory.createFromImage(document, solidImage(80, 50, Color.RED));
+            PDFormXObject form = new PDFormXObject(document);
+            form.setResources(new PDResources());
+            form.setBBox(new PDRectangle(0, 0, 80, 50));
+            try (OutputStream output = form.getContentStream().createOutputStream();
+                    PDPageContentStream formContent = new PDPageContentStream(document, form, output)) {
+                formContent.drawImage(image, 0, 0, 80, 50);
+                formContent.addRect(0, 0, 80, 50);
+                formContent.stroke();
+            }
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(PDType1Font.HELVETICA, 12);
+                content.newLineAtOffset(72, 720);
+                content.showText("Form image with border");
+                content.endText();
+
+                content.saveGraphicsState();
+                content.transform(Matrix.getTranslateInstance(72, 620));
+                content.drawForm(form);
+                content.restoreGraphicsState();
+            }
+
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
     private PDFormXObject createImageForm(PDDocument document, Color color) throws Exception {
         PDImageXObject image = LosslessFactory.createFromImage(document, solidImage(80, 50, color));
         PDFormXObject form = new PDFormXObject(document);
@@ -281,5 +413,81 @@ class PdfImagePlaceholderServiceTest {
             }
         }
         return imageDraws;
+    }
+
+    private int countStrokedRectangles(PDContentStream contentStream, float x, float y, float width, float height)
+            throws Exception {
+        PDFStreamParser parser = new PDFStreamParser(contentStream);
+        parser.parse();
+        List<Object> tokens = parser.getTokens();
+        int count = 0;
+        for (int i = 4; i + 1 < tokens.size(); i++) {
+            Object token = tokens.get(i);
+            Object paintToken = tokens.get(i + 1);
+            if (!(token instanceof Operator) || !"re".equals(((Operator) token).getName())
+                    || !(paintToken instanceof Operator) || !"S".equals(((Operator) paintToken).getName())) {
+                continue;
+            }
+            if (numberEquals(tokens.get(i - 4), x) && numberEquals(tokens.get(i - 3), y)
+                    && numberEquals(tokens.get(i - 2), width) && numberEquals(tokens.get(i - 1), height)) {
+                count++;
+            }
+        }
+        PDResources resources = contentStream.getResources();
+        if (resources != null) {
+            for (int i = 1; i < tokens.size(); i++) {
+                Object token = tokens.get(i);
+                if (token instanceof Operator && OperatorName.DRAW_OBJECT.equals(((Operator) token).getName())
+                        && tokens.get(i - 1) instanceof COSName) {
+                    PDXObject xObject = resources.getXObject((COSName) tokens.get(i - 1));
+                    if (xObject instanceof PDFormXObject) {
+                        count += countStrokedRectangles((PDFormXObject) xObject, x, y, width, height);
+                    }
+                }
+            }
+        }
+        return count;
+    }
+
+    private boolean numberEquals(Object token, float expected) {
+        return token instanceof COSNumber && Math.abs(((COSNumber) token).floatValue() - expected) < 0.01f;
+    }
+
+    private int countLinePathRectangles(PDContentStream contentStream, float x, float y, float width, float height)
+            throws Exception {
+        PDFStreamParser parser = new PDFStreamParser(contentStream);
+        parser.parse();
+        List<Object> tokens = parser.getTokens();
+        int count = 0;
+        for (int i = 13; i < tokens.size(); i++) {
+            Object token = tokens.get(i);
+            if (!(token instanceof Operator) || !"S".equals(((Operator) token).getName())) {
+                continue;
+            }
+            if (isClosedLinePath(tokens, i - 13, x, y, width, height)) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private boolean isClosedLinePath(List<Object> tokens, int start, float x, float y, float width, float height) {
+        return numberEquals(tokens.get(start), x)
+                && numberEquals(tokens.get(start + 1), y)
+                && isOperator(tokens.get(start + 2), "m")
+                && numberEquals(tokens.get(start + 3), x + width)
+                && numberEquals(tokens.get(start + 4), y)
+                && isOperator(tokens.get(start + 5), "l")
+                && numberEquals(tokens.get(start + 6), x + width)
+                && numberEquals(tokens.get(start + 7), y + height)
+                && isOperator(tokens.get(start + 8), "l")
+                && numberEquals(tokens.get(start + 9), x)
+                && numberEquals(tokens.get(start + 10), y + height)
+                && isOperator(tokens.get(start + 11), "l")
+                && isOperator(tokens.get(start + 12), "h");
+    }
+
+    private boolean isOperator(Object token, String name) {
+        return token instanceof Operator && name.equals(((Operator) token).getName());
     }
 }

@@ -27,6 +27,7 @@ import org.apache.pdfbox.contentstream.operator.state.SetGraphicsStateParameters
 import org.apache.pdfbox.contentstream.operator.state.SetMatrix;
 import org.apache.pdfbox.cos.COSBase;
 import org.apache.pdfbox.cos.COSName;
+import org.apache.pdfbox.cos.COSNumber;
 import org.apache.pdfbox.pdfparser.PDFStreamParser;
 import org.apache.pdfbox.pdfwriter.ContentStreamWriter;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -51,6 +52,7 @@ public class PdfImagePlaceholderService {
     private static final PDFont PLACEHOLDER_FONT = PDType1Font.HELVETICA_BOLD;
     private static final float MAX_FONT_SIZE = 14f;
     private static final float MIN_FONT_SIZE = 4f;
+    private static final float MAX_BORDER_PADDING = 8f;
 
     public Result replaceImages(byte[] input) throws IOException {
         if (input == null || input.length == 0) {
@@ -71,7 +73,8 @@ public class PdfImagePlaceholderService {
             }
 
             for (PagePlaceholders placeholders : pagePlaceholders) {
-                removeImageDraws(document, placeholders.getPage(), new HashSet<COSBase>());
+                removeImageDraws(document, placeholders.getPage(), placeholders.getPlaceholders(),
+                        new HashSet<COSBase>());
             }
             for (PagePlaceholders placeholders : pagePlaceholders) {
                 drawPlaceholders(document, placeholders.getPage(), placeholders.getPlaceholders());
@@ -90,8 +93,9 @@ public class PdfImagePlaceholderService {
         return output.toByteArray();
     }
 
-    private void removeImageDraws(PDDocument document, PDPage page, Set<COSBase> visitedForms) throws IOException {
-        List<Object> rewrittenTokens = rewriteImageDraws(document, page, visitedForms);
+    private void removeImageDraws(PDDocument document, PDPage page, List<ImagePlaceholder> placeholders,
+            Set<COSBase> visitedForms) throws IOException {
+        List<Object> rewrittenTokens = rewriteImageDraws(document, page, placeholders, visitedForms);
         if (rewrittenTokens == null) {
             return;
         }
@@ -109,7 +113,8 @@ public class PdfImagePlaceholderService {
             return;
         }
 
-        List<Object> rewrittenTokens = rewriteImageDraws(document, form, visitedForms);
+        List<Object> rewrittenTokens = rewriteImageDraws(document, form, collectLocalImagePlaceholders(form),
+                visitedForms);
         if (rewrittenTokens == null) {
             return;
         }
@@ -119,8 +124,21 @@ public class PdfImagePlaceholderService {
         }
     }
 
-    private List<Object> rewriteImageDraws(PDDocument document, PDContentStream contentStream, Set<COSBase> visitedForms)
-            throws IOException {
+    private List<ImagePlaceholder> collectLocalImagePlaceholders(PDFormXObject form) throws IOException {
+        if (form.getResources() == null) {
+            return Collections.emptyList();
+        }
+
+        ImagePositionCollector collector = new ImagePositionCollector(1, false);
+        PDPage syntheticPage = new PDPage(form.getBBox());
+        syntheticPage.setResources(form.getResources());
+        syntheticPage.setContents(form.getContentStream());
+        collector.processPage(syntheticPage);
+        return collector.getPlaceholders();
+    }
+
+    private List<Object> rewriteImageDraws(PDDocument document, PDContentStream contentStream,
+            List<ImagePlaceholder> placeholders, Set<COSBase> visitedForms) throws IOException {
         PDResources resources = contentStream.getResources();
         if (resources == null) {
             return null;
@@ -130,8 +148,19 @@ public class PdfImagePlaceholderService {
         parser.parse();
         List<Object> rewrittenTokens = new ArrayList<Object>();
 
-        for (Object token : parser.getTokens()) {
+        List<Object> tokens = parser.getTokens();
+        for (int i = 0; i < tokens.size(); i++) {
+            Object token = tokens.get(i);
             if (isInlineImageOperator(token)) {
+                continue;
+            }
+            if (isRemovableImageBorderRectangle(tokens, i, placeholders)) {
+                removeLastTokens(rewrittenTokens, 4);
+                i++;
+                continue;
+            }
+            if (isRemovableImageBorderLinePath(tokens, i, placeholders)) {
+                removeLastTokens(rewrittenTokens, 13);
                 continue;
             }
             PDXObject xObject = getDrawnXObject(token, rewrittenTokens, resources);
@@ -145,6 +174,172 @@ public class PdfImagePlaceholderService {
             rewrittenTokens.add(token);
         }
         return rewrittenTokens;
+    }
+
+    private boolean isRemovableImageBorderRectangle(List<Object> tokens, int operatorIndex,
+            List<ImagePlaceholder> placeholders) {
+        if (placeholders.isEmpty() || operatorIndex < 4 || operatorIndex + 1 >= tokens.size()) {
+            return false;
+        }
+        if (!isOperator(tokens.get(operatorIndex), OperatorName.APPEND_RECT)
+                || !isStrokeOperator(tokens.get(operatorIndex + 1))) {
+            return false;
+        }
+
+        Float x = numberValue(tokens.get(operatorIndex - 4));
+        Float y = numberValue(tokens.get(operatorIndex - 3));
+        Float width = numberValue(tokens.get(operatorIndex - 2));
+        Float height = numberValue(tokens.get(operatorIndex - 1));
+        if (x == null || y == null || width == null || height == null) {
+            return false;
+        }
+
+        return matchesImageBorder(x.floatValue(), y.floatValue(), width.floatValue(), height.floatValue(),
+                placeholders);
+    }
+
+    private boolean isRemovableImageBorderLinePath(List<Object> tokens, int operatorIndex,
+            List<ImagePlaceholder> placeholders) {
+        if (placeholders.isEmpty() || operatorIndex < 13 || !isStrokeOperator(tokens.get(operatorIndex))) {
+            return false;
+        }
+        int start = operatorIndex - 13;
+        if (!isClosedRectangleLinePath(tokens, start)) {
+            return false;
+        }
+
+        float minX = numberValue(tokens.get(start)).floatValue();
+        float maxX = minX;
+        float minY = numberValue(tokens.get(start + 1)).floatValue();
+        float maxY = minY;
+        int[] coordinateIndexes = new int[] { start, start + 3, start + 6, start + 9 };
+        for (int coordinateIndex : coordinateIndexes) {
+            float x = numberValue(tokens.get(coordinateIndex)).floatValue();
+            float y = numberValue(tokens.get(coordinateIndex + 1)).floatValue();
+            minX = Math.min(minX, x);
+            maxX = Math.max(maxX, x);
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+
+        return matchesImageBorder(minX, minY, maxX - minX, maxY - minY, placeholders);
+    }
+
+    private boolean isClosedRectangleLinePath(List<Object> tokens, int start) {
+        Float x1 = numberValue(tokens.get(start));
+        Float y1 = numberValue(tokens.get(start + 1));
+        Float x2 = numberValue(tokens.get(start + 3));
+        Float y2 = numberValue(tokens.get(start + 4));
+        Float x3 = numberValue(tokens.get(start + 6));
+        Float y3 = numberValue(tokens.get(start + 7));
+        Float x4 = numberValue(tokens.get(start + 9));
+        Float y4 = numberValue(tokens.get(start + 10));
+        if (x1 == null || y1 == null || x2 == null || y2 == null || x3 == null || y3 == null
+                || x4 == null || y4 == null) {
+            return false;
+        }
+        if (!isOperator(tokens.get(start + 2), OperatorName.MOVE_TO)
+                || !isOperator(tokens.get(start + 5), OperatorName.LINE_TO)
+                || !isOperator(tokens.get(start + 8), OperatorName.LINE_TO)
+                || !isOperator(tokens.get(start + 11), OperatorName.LINE_TO)
+                || !isOperator(tokens.get(start + 12), OperatorName.CLOSE_PATH)) {
+            return false;
+        }
+
+        Point[] points = new Point[] {
+                new Point(x1.floatValue(), y1.floatValue()),
+                new Point(x2.floatValue(), y2.floatValue()),
+                new Point(x3.floatValue(), y3.floatValue()),
+                new Point(x4.floatValue(), y4.floatValue())
+        };
+        return isAxisAlignedRectangle(points);
+    }
+
+    private boolean isAxisAlignedRectangle(Point[] points) {
+        float minX = points[0].getX();
+        float maxX = minX;
+        float minY = points[0].getY();
+        float maxY = minY;
+        for (Point point : points) {
+            minX = Math.min(minX, point.getX());
+            maxX = Math.max(maxX, point.getX());
+            minY = Math.min(minY, point.getY());
+            maxY = Math.max(maxY, point.getY());
+        }
+        if (sharesCoordinate(minX, maxX) || sharesCoordinate(minY, maxY)) {
+            return false;
+        }
+        for (int i = 0; i < points.length; i++) {
+            Point current = points[i];
+            Point next = points[(i + 1) % points.length];
+            if (!isAxisAlignedSegment(current, next) || !isRectangleCorner(current, minX, minY, maxX, maxY)) {
+                return false;
+            }
+        }
+        return hasCorner(points, minX, minY)
+                && hasCorner(points, minX, maxY)
+                && hasCorner(points, maxX, minY)
+                && hasCorner(points, maxX, maxY);
+    }
+
+    private boolean isAxisAlignedSegment(Point first, Point second) {
+        return sharesCoordinate(first.getX(), second.getX()) || sharesCoordinate(first.getY(), second.getY());
+    }
+
+    private boolean isRectangleCorner(Point point, float minX, float minY, float maxX, float maxY) {
+        return (sharesCoordinate(point.getX(), minX) || sharesCoordinate(point.getX(), maxX))
+                && (sharesCoordinate(point.getY(), minY) || sharesCoordinate(point.getY(), maxY));
+    }
+
+    private boolean hasCorner(Point[] points, float x, float y) {
+        for (Point point : points) {
+            if (sharesCoordinate(point.getX(), x) && sharesCoordinate(point.getY(), y)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean sharesCoordinate(float first, float second) {
+        return Math.abs(first - second) < 0.01f;
+    }
+
+    private boolean isStrokeOperator(Object token) {
+        if (!(token instanceof Operator)) {
+            return false;
+        }
+        String name = ((Operator) token).getName();
+        return OperatorName.STROKE_PATH.equals(name) || OperatorName.CLOSE_AND_STROKE.equals(name);
+    }
+
+    private boolean isOperator(Object token, String operatorName) {
+        return token instanceof Operator && operatorName.equals(((Operator) token).getName());
+    }
+
+    private Float numberValue(Object token) {
+        if (!(token instanceof COSNumber)) {
+            return null;
+        }
+        return Float.valueOf(((COSNumber) token).floatValue());
+    }
+
+    private boolean matchesImageBorder(float x, float y, float width, float height,
+            List<ImagePlaceholder> placeholders) {
+        Rectangle border = Rectangle.from(x, y, width, height);
+        for (ImagePlaceholder placeholder : placeholders) {
+            Rectangle image = Rectangle.from(placeholder.getX(), placeholder.getY(), placeholder.getWidth(),
+                    placeholder.getHeight());
+            if (border.isCloseTo(image, MAX_BORDER_PADDING)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void removeLastTokens(List<Object> tokens, int count) {
+        for (int i = 0; i < count && !tokens.isEmpty(); i++) {
+            tokens.remove(tokens.size() - 1);
+        }
     }
 
     private boolean isInlineImageOperator(Object token) {
@@ -210,10 +405,16 @@ public class PdfImagePlaceholderService {
     private static class ImagePositionCollector extends PDFStreamEngine {
         private final List<ImagePlaceholder> placeholders = new ArrayList<ImagePlaceholder>();
         private final List<ExtractedImage> extractedImages = new ArrayList<ExtractedImage>();
+        private final boolean extractImages;
         private int nextImageNumber;
 
         ImagePositionCollector(int startImageNumber) throws IOException {
+            this(startImageNumber, true);
+        }
+
+        ImagePositionCollector(int startImageNumber, boolean extractImages) throws IOException {
             this.nextImageNumber = startImageNumber;
+            this.extractImages = extractImages;
             addOperator(new Concatenate());
             addOperator(new DrawObject());
             addOperator(new SetGraphicsStateParameters());
@@ -258,7 +459,10 @@ public class PdfImagePlaceholderService {
         private void addImage(PDImage image, Matrix matrix) throws IOException {
             int imageNumber = nextImageNumber;
             placeholders.add(toPlaceholder(matrix, imageNumber));
-            extractedImages.add(new ExtractedImage("image" + imageNumber + ".png", "image/png", toPngBytes(image)));
+            if (extractImages) {
+                extractedImages.add(new ExtractedImage("image" + imageNumber + ".png", "image/png",
+                        toPngBytes(image)));
+            }
             nextImageNumber++;
         }
 
@@ -346,6 +550,52 @@ public class PdfImagePlaceholderService {
 
         List<ImagePlaceholder> getPlaceholders() {
             return placeholders;
+        }
+    }
+
+    private static class Rectangle {
+        private final float left;
+        private final float bottom;
+        private final float right;
+        private final float top;
+
+        static Rectangle from(float x, float y, float width, float height) {
+            return new Rectangle(Math.min(x, x + width),
+                    Math.min(y, y + height),
+                    Math.max(x, x + width),
+                    Math.max(y, y + height));
+        }
+
+        Rectangle(float left, float bottom, float right, float top) {
+            this.left = left;
+            this.bottom = bottom;
+            this.right = right;
+            this.top = top;
+        }
+
+        boolean isCloseTo(Rectangle other, float tolerance) {
+            return Math.abs(left - other.left) <= tolerance
+                    && Math.abs(bottom - other.bottom) <= tolerance
+                    && Math.abs(right - other.right) <= tolerance
+                    && Math.abs(top - other.top) <= tolerance;
+        }
+    }
+
+    private static class Point {
+        private final float x;
+        private final float y;
+
+        Point(float x, float y) {
+            this.x = x;
+            this.y = y;
+        }
+
+        float getX() {
+            return x;
+        }
+
+        float getY() {
+            return y;
         }
     }
 
