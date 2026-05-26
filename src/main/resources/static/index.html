@@ -97,6 +97,12 @@
             transform: translateY(-1px);
         }
 
+        .drop-zone.is-processing {
+            border-color: var(--accent);
+            background: #f1faf7;
+            cursor: wait;
+        }
+
         .drop-content {
             width: min(420px, 100%);
             text-align: center;
@@ -203,6 +209,11 @@
             color: var(--danger);
         }
 
+        .message.success {
+            color: var(--accent);
+            font-weight: 700;
+        }
+
         input[type="file"] {
             position: absolute;
             width: 1px;
@@ -245,7 +256,7 @@
 <div class="shell">
     <header>
         <div class="brand">Doc Image Stripper</div>
-        <div class="state" id="state">待上传</div>
+        <div class="state" id="state" aria-live="polite">待上传</div>
     </header>
 
     <main>
@@ -264,7 +275,7 @@
 
             <div class="info-bar">
                 <div class="filename" id="filename">还没有选择文件</div>
-                <div class="message" id="message">准备好了</div>
+                <div class="message" id="message" aria-live="polite">准备好了</div>
             </div>
         </section>
     </main>
@@ -286,15 +297,18 @@
 
     const setBusy = (busy) => {
         pickButton.disabled = busy;
+        dropZone.classList.toggle('is-processing', busy);
+        dropZone.setAttribute('aria-busy', busy ? 'true' : 'false');
         dropZone.style.cursor = busy ? 'wait' : 'pointer';
         if (busy) {
             state.textContent = '处理中';
         }
     };
 
-    const setMessage = (text, isError = false) => {
+    const setMessage = (text, isError = false, isSuccess = false) => {
         message.textContent = text;
         message.classList.toggle('error', isError);
+        message.classList.toggle('success', isSuccess);
     };
 
     const openPicker = () => fileInput.click();
@@ -336,7 +350,7 @@
         }
 
         filename.textContent = file.name;
-        setMessage('上传中');
+        setMessage('上传中，正在处理，请稍等');
         setBusy(true);
         downloadButton.disabled = true;
 
@@ -360,7 +374,7 @@
             triggerDownload(lastDownloadUrl, lastDownloadName);
 
             state.textContent = '已完成';
-            setMessage('已下载 ' + lastDownloadName);
+            setMessage('处理完成，已下载 ' + lastDownloadName, false, true);
             downloadButton.disabled = false;
         } catch (error) {
             state.textContent = '失败';
@@ -371,9 +385,56 @@
         }
     };
 
-    pickButton.addEventListener('click', openPicker);
+    const hasDraggedFiles = (event) => event.dataTransfer
+            && Array.from(event.dataTransfer.types || []).indexOf('Files') >= 0;
+
+    const preventWindowFileDrop = (event) => {
+        if (!hasDraggedFiles(event)) {
+            return;
+        }
+        event.preventDefault();
+        if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'copy';
+        }
+    };
+
+    const firstPdfOrFirstFile = (files) => Array.from(files || [])
+            .find((file) => file.name.toLowerCase().endsWith('.pdf')) || (files && files[0]);
+
+    const showDragReady = (event) => {
+        preventWindowFileDrop(event);
+        dropZone.classList.add('is-over');
+        setMessage('松开鼠标开始上传');
+    };
+
+    const isInsideDropZone = (event) => {
+        const rect = dropZone.getBoundingClientRect();
+        return event.clientX >= rect.left && event.clientX <= rect.right
+                && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    };
+
+    const hideDragReady = (event) => {
+        preventWindowFileDrop(event);
+        if (!isInsideDropZone(event)) {
+            dropZone.classList.remove('is-over');
+        }
+    };
+
+    const handleDrop = (event) => {
+        preventWindowFileDrop(event);
+        dropZone.classList.remove('is-over');
+        upload(firstPdfOrFirstFile(event.dataTransfer.files));
+    };
+
+    document.addEventListener('dragover', preventWindowFileDrop);
+    document.addEventListener('drop', preventWindowFileDrop);
+
+    pickButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        openPicker();
+    });
     dropZone.addEventListener('click', (event) => {
-        if (event.target !== downloadButton) {
+        if (!event.target.closest('button')) {
             openPicker();
         }
     });
@@ -392,23 +453,10 @@
         }
     });
 
-    ['dragenter', 'dragover'].forEach((eventName) => {
-        dropZone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            dropZone.classList.add('is-over');
-        });
-    });
-
-    ['dragleave', 'drop'].forEach((eventName) => {
-        dropZone.addEventListener(eventName, (event) => {
-            event.preventDefault();
-            dropZone.classList.remove('is-over');
-        });
-    });
-
-    dropZone.addEventListener('drop', (event) => {
-        upload(event.dataTransfer.files[0]);
-    });
+    dropZone.addEventListener('dragenter', showDragReady);
+    dropZone.addEventListener('dragover', showDragReady);
+    dropZone.addEventListener('dragleave', hideDragReady);
+    dropZone.addEventListener('drop', handleDrop);
 </script>
 </body>
 </html>
