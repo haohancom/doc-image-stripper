@@ -19,6 +19,8 @@ class StaticPageTest {
         assertThat(html).contains("event.dataTransfer.dropEffect = 'copy'");
         assertThat(html).contains("dropZone.classList.toggle('is-processing', busy)");
         assertThat(html).contains("处理完成，已下载");
+        assertThat(html).contains("window.location.protocol === 'file:' ? 'http://localhost:8080' : ''");
+        assertThat(html).contains("fetch(API_BASE + '/api/pdf/replace-images'");
     }
 
     private String readIndexHtml() throws Exception {

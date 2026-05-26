@@ -292,6 +292,8 @@
     const message = document.getElementById('message');
     const state = document.getElementById('state');
 
+    const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8080' : '';
+
     let lastDownloadUrl = '';
     let lastDownloadName = '';
 
@@ -358,7 +360,7 @@
         formData.append('file', file);
 
         try {
-            const response = await fetch('/api/pdf/replace-images', {
+            const response = await fetch(API_BASE + '/api/pdf/replace-images', {
                 method: 'POST',
                 body: formData
             });

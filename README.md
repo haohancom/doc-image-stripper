@@ -38,3 +38,15 @@ PORT=8081 ./start.sh
 ```bash
 mvn test
 ```
+
+## Build Windows Package
+
+```bash
+./package-windows.sh
+```
+
+The package is written to:
+
+```text
+dist/doc-image-stripper-windows.zip
+```

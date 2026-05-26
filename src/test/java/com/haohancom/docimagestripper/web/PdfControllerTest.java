@@ -45,4 +45,21 @@ class PdfControllerTest {
                 .andExpect(content().contentType(MediaType.APPLICATION_PDF))
                 .andExpect(content().bytes(processedPdf));
     }
+
+    @Test
+    void allowsUploadsFromDoubleClickedStaticPage() throws Exception {
+        byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
+        given(service.replaceImages(any(byte[].class))).willReturn(processedPdf);
+        MockMultipartFile file = new MockMultipartFile(
+                "file",
+                "sample.pdf",
+                MediaType.APPLICATION_PDF_VALUE,
+                "input pdf".getBytes(StandardCharsets.UTF_8));
+
+        mockMvc.perform(multipart("/api/pdf/replace-images")
+                        .file(file)
+                        .header(HttpHeaders.ORIGIN, "null"))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN, "*"));
+    }
 }
