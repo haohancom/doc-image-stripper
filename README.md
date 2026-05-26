@@ -18,13 +18,19 @@ Doc Image Stripper is a Java 8 Spring Boot service for removing images from docu
 ## Run Locally
 
 ```bash
-mvn spring-boot:run
+./start.sh
 ```
 
 Then open:
 
 ```text
 http://localhost:8080/
+```
+
+To use another port:
+
+```bash
+PORT=8081 ./start.sh
 ```
 
 ## Test
