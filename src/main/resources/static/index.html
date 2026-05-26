@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Doc Image Stripper</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #f6f7f4;
+            --panel: #ffffff;
+            --ink: #1d2420;
+            --muted: #6c756f;
+            --line: #d9ded8;
+            --accent: #0f7b68;
+            --accent-ink: #ffffff;
+            --danger: #b4372e;
+            --shadow: 0 18px 48px rgba(34, 43, 38, 0.14);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--ink);
+        }
+
+        .shell {
+            min-height: 100vh;
+            display: grid;
+            grid-template-rows: auto 1fr;
+        }
+
+        header {
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 28px;
+            border-bottom: 1px solid var(--line);
+            background: rgba(255, 255, 255, 0.74);
+        }
+
+        .brand {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .state {
+            min-width: 108px;
+            text-align: right;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        main {
+            display: grid;
+            place-items: center;
+            padding: 32px;
+        }
+
+        .uploader {
+            width: min(720px, 100%);
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .drop-zone {
+            min-height: 340px;
+            display: grid;
+            place-items: center;
+            padding: 40px 28px;
+            border: 2px dashed #b9c2bb;
+            margin: 18px;
+            border-radius: 8px;
+            background: #fbfcfa;
+            cursor: pointer;
+            transition: border-color 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
+        }
+
+        .drop-zone:focus-visible {
+            outline: 3px solid rgba(15, 123, 104, 0.24);
+            outline-offset: 2px;
+        }
+
+        .drop-zone.is-over {
+            border-color: var(--accent);
+            background: #eef8f4;
+            transform: translateY(-1px);
+        }
+
+        .drop-content {
+            width: min(420px, 100%);
+            text-align: center;
+        }
+
+        .file-mark {
+            width: 76px;
+            height: 96px;
+            margin: 0 auto 22px;
+            border: 2px solid var(--accent);
+            border-radius: 6px;
+            position: relative;
+            display: grid;
+            place-items: center;
+            color: var(--accent);
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .file-mark::after {
+            content: "";
+            position: absolute;
+            right: -2px;
+            top: -2px;
+            width: 22px;
+            height: 22px;
+            background: #d7eee7;
+            border-left: 2px solid var(--accent);
+            border-bottom: 2px solid var(--accent);
+            border-radius: 0 4px 0 4px;
+        }
+
+        h1 {
+            margin: 0 0 10px;
+            font-size: 30px;
+            line-height: 1.18;
+            letter-spacing: 0;
+        }
+
+        .hint {
+            margin: 0 0 24px;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.55;
+        }
+
+        .button-row {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            height: 42px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            padding: 0 18px;
+            font: inherit;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .primary {
+            background: var(--accent);
+            color: var(--accent-ink);
+        }
+
+        .secondary {
+            background: #ffffff;
+            color: var(--ink);
+            border-color: var(--line);
+        }
+
+        button:disabled {
+            opacity: 0.58;
+            cursor: default;
+        }
+
+        .info-bar {
+            min-height: 58px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 0 22px 18px;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .filename {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .message {
+            text-align: right;
+            color: var(--muted);
+        }
+
+        .message.error {
+            color: var(--danger);
+        }
+
+        input[type="file"] {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @media (max-width: 620px) {
+            header {
+                padding: 0 18px;
+            }
+
+            main {
+                padding: 18px;
+            }
+
+            .drop-zone {
+                min-height: 300px;
+                padding: 28px 18px;
+                margin: 12px;
+            }
+
+            h1 {
+                font-size: 25px;
+            }
+
+            .info-bar {
+                align-items: flex-start;
+                flex-direction: column;
+            }
+
+            .message {
+                text-align: left;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="shell">
+    <header>
+        <div class="brand">Doc Image Stripper</div>
+        <div class="state" id="state">待上传</div>
+    </header>
+
+    <main>
+        <section class="uploader" aria-label="PDF 上传">
+            <div class="drop-zone" id="dropZone" role="button" tabindex="0">
+                <div class="drop-content">
+                    <div class="file-mark">PDF</div>
+                    <h1>把 PDF 丢进来</h1>
+                    <p class="hint">图片会按出现顺序变成 [image1]、[image2]。</p>
+                    <div class="button-row">
+                        <button class="primary" type="button" id="pickButton">选择 PDF</button>
+                        <button class="secondary" type="button" id="downloadButton" disabled>重新下载</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-bar">
+                <div class="filename" id="filename">还没有选择文件</div>
+                <div class="message" id="message">准备好了</div>
+            </div>
+        </section>
+    </main>
+</div>
+
+<input id="fileInput" type="file" accept="application/pdf,.pdf">
+
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const pickButton = document.getElementById('pickButton');
+    const downloadButton = document.getElementById('downloadButton');
+    const filename = document.getElementById('filename');
+    const message = document.getElementById('message');
+    const state = document.getElementById('state');
+
+    let lastDownloadUrl = '';
+    let lastDownloadName = '';
+
+    const setBusy = (busy) => {
+        pickButton.disabled = busy;
+        dropZone.style.cursor = busy ? 'wait' : 'pointer';
+        if (busy) {
+            state.textContent = '处理中';
+        }
+    };
+
+    const setMessage = (text, isError = false) => {
+        message.textContent = text;
+        message.classList.toggle('error', isError);
+    };
+
+    const openPicker = () => fileInput.click();
+
+    const getDownloadName = (response, fallbackName) => {
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const encodedMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+        if (encodedMatch) {
+            return decodeURIComponent(encodedMatch[1]);
+        }
+        const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+        if (plainMatch) {
+            return plainMatch[1];
+        }
+        return fallbackName.replace(/\.pdf$/i, '') + '-replaced.pdf';
+    };
+
+    const triggerDownload = (url, name) => {
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = name;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    };
+
+    const upload = async (file) => {
+        if (!file) {
+            return;
+        }
+        if (!file.name.toLowerCase().endsWith('.pdf')) {
+            setMessage('只支持 PDF 文件', true);
+            return;
+        }
+
+        if (lastDownloadUrl) {
+            URL.revokeObjectURL(lastDownloadUrl);
+            lastDownloadUrl = '';
+        }
+
+        filename.textContent = file.name;
+        setMessage('上传中');
+        setBusy(true);
+        downloadButton.disabled = true;
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const response = await fetch('/api/pdf/replace-images', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || '处理失败');
+            }
+
+            const blob = await response.blob();
+            lastDownloadName = getDownloadName(response, file.name);
+            lastDownloadUrl = URL.createObjectURL(blob);
+            triggerDownload(lastDownloadUrl, lastDownloadName);
+
+            state.textContent = '已完成';
+            setMessage('已下载 ' + lastDownloadName);
+            downloadButton.disabled = false;
+        } catch (error) {
+            state.textContent = '失败';
+            setMessage(error.message || '处理失败', true);
+        } finally {
+            setBusy(false);
+            fileInput.value = '';
+        }
+    };
+
+    pickButton.addEventListener('click', openPicker);
+    dropZone.addEventListener('click', (event) => {
+        if (event.target !== downloadButton) {
+            openPicker();
+        }
+    });
+    dropZone.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            openPicker();
+        }
+    });
+    fileInput.addEventListener('change', () => upload(fileInput.files[0]));
+
+    downloadButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        if (lastDownloadUrl && lastDownloadName) {
+            triggerDownload(lastDownloadUrl, lastDownloadName);
+        }
+    });
+
+    ['dragenter', 'dragover'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropZone.classList.add('is-over');
+        });
+    });
+
+    ['dragleave', 'drop'].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (event) => {
+            event.preventDefault();
+            dropZone.classList.remove('is-over');
+        });
+    });
+
+    dropZone.addEventListener('drop', (event) => {
+        upload(event.dataTransfer.files[0]);
+    });
+</script>
+</body>
+</html>
