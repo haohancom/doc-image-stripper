@@ -19,6 +19,11 @@ class StaticPageTest {
         assertThat(html).contains("event.dataTransfer.dropEffect = 'copy'");
         assertThat(html).contains("dropZone.classList.toggle('is-processing', busy)");
         assertThat(html).contains("处理完成，已下载");
+        assertThat(html).contains("height: 100vh;");
+        assertThat(html).contains("overflow: hidden;");
+        assertThat(html).contains("grid-template-rows: auto minmax(0, 1fr)");
+        assertThat(html).contains("max-height: 100%;");
+        assertThat(html).contains("min-height: clamp(220px, 52vh, 340px);");
         assertThat(html).contains("PDF / Word 上传");
         assertThat(html).contains("PDF / Word");
         assertThat(html).contains("class=\"file-hero\"");
@@ -26,6 +31,11 @@ class StaticPageTest {
         assertThat(html).contains("class=\"file-card doc\"");
         assertThat(html).contains("transform: rotate(-30deg)");
         assertThat(html).contains("transform: rotate(30deg)");
+        assertThat(html).contains(".drop-zone:hover .file-card.pdf");
+        assertThat(html).contains(".drop-zone:hover .file-card.doc");
+        assertThat(html).contains("@keyframes pdf-clap");
+        assertThat(html).contains("@keyframes doc-clap");
+        assertThat(html).contains("@media (prefers-reduced-motion: reduce)");
         assertThat(html).doesNotContain("class=\"file-mark\"");
         assertThat(html).contains("accept=\".pdf,.doc,.dot,.wbk,.docx,.docm,.dotx,.dotm,.docb\"");
         assertThat(html).contains("const SUPPORTED_EXTENSIONS = ['.pdf', '.doc', '.dot', '.wbk', '.docx', '.docm', '.dotx', '.dotm', '.docb']");

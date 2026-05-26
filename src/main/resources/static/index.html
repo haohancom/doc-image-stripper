@@ -22,7 +22,16 @@
             box-sizing: border-box;
         }
 
+        html,
         body {
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        body {
+            position: fixed;
+            inset: 0;
+            width: 100%;
             margin: 0;
             min-height: 100vh;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -31,13 +40,14 @@
         }
 
         .shell {
-            min-height: 100vh;
+            height: 100vh;
+            min-height: 0;
             display: grid;
-            grid-template-rows: auto 1fr;
+            grid-template-rows: auto minmax(0, 1fr);
         }
 
         header {
-            height: 64px;
+            height: 58px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -61,11 +71,13 @@
         main {
             display: grid;
             place-items: center;
-            padding: 32px;
+            min-height: 0;
+            padding: clamp(12px, 3vh, 28px);
         }
 
         .uploader {
             width: min(720px, 100%);
+            max-height: 100%;
             background: var(--panel);
             border: 1px solid var(--line);
             border-radius: 8px;
@@ -74,12 +86,12 @@
         }
 
         .drop-zone {
-            min-height: 340px;
+            min-height: clamp(220px, 52vh, 340px);
             display: grid;
             place-items: center;
-            padding: 40px 28px;
+            padding: clamp(18px, 4vh, 36px) 28px;
             border: 2px dashed #b9c2bb;
-            margin: 18px;
+            margin: clamp(10px, 2vh, 18px);
             border-radius: 8px;
             background: #fbfcfa;
             cursor: pointer;
@@ -112,7 +124,7 @@
             position: relative;
             width: 210px;
             height: 130px;
-            margin: 0 auto 18px;
+            margin: 0 auto clamp(10px, 2vh, 18px);
         }
 
         .file-card {
@@ -129,6 +141,8 @@
             font-weight: 900;
             letter-spacing: 0;
             box-shadow: 0 18px 26px rgba(29, 36, 32, 0.16);
+            transform-origin: center 76%;
+            will-change: transform;
         }
 
         .file-card::after {
@@ -157,19 +171,65 @@
             transform: rotate(30deg);
         }
 
+        .drop-zone:hover .file-card.pdf {
+            animation: pdf-clap 0.72s cubic-bezier(0.2, 0.7, 0.2, 1);
+        }
+
+        .drop-zone:hover .file-card.doc {
+            animation: doc-clap 0.72s cubic-bezier(0.2, 0.7, 0.2, 1);
+        }
+
+        @keyframes pdf-clap {
+            0%,
+            100% {
+                transform: rotate(-30deg);
+            }
+
+            36% {
+                transform: translateX(-18px) translateY(-1px) rotate(-34deg);
+            }
+
+            58% {
+                transform: translateX(8px) rotate(-24deg);
+            }
+
+            72% {
+                transform: translateX(-3px) rotate(-32deg);
+            }
+        }
+
+        @keyframes doc-clap {
+            0%,
+            100% {
+                transform: rotate(30deg);
+            }
+
+            36% {
+                transform: translateX(18px) translateY(-1px) rotate(34deg);
+            }
+
+            58% {
+                transform: translateX(-8px) rotate(24deg);
+            }
+
+            72% {
+                transform: translateX(3px) rotate(32deg);
+            }
+        }
+
         .file-card span {
             transform: translateY(6px);
         }
 
         h1 {
             margin: 0 0 10px;
-            font-size: 30px;
+            font-size: clamp(25px, 4vh, 30px);
             line-height: 1.18;
             letter-spacing: 0;
         }
 
         .hint {
-            margin: 0 0 24px;
+            margin: 0 0 clamp(14px, 2.8vh, 24px);
             color: var(--muted);
             font-size: 16px;
             line-height: 1.55;
@@ -185,7 +245,7 @@
         .placeholder-block {
             display: grid;
             gap: 10px;
-            margin: 0 0 20px;
+            margin: 0 0 clamp(12px, 2.5vh, 20px);
         }
 
         .placeholder-row {
@@ -272,12 +332,12 @@
         }
 
         .info-bar {
-            min-height: 58px;
+            min-height: 46px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 16px;
-            padding: 0 22px 18px;
+            padding: 0 22px clamp(10px, 2vh, 18px);
             color: var(--muted);
             font-size: 14px;
         }
@@ -313,23 +373,24 @@
 
         @media (max-width: 620px) {
             header {
+                height: 52px;
                 padding: 0 18px;
             }
 
             main {
-                padding: 18px;
+                padding: 10px;
             }
 
             .drop-zone {
-                min-height: 300px;
-                padding: 28px 18px;
-                margin: 12px;
+                min-height: clamp(200px, 54vh, 300px);
+                padding: 16px 16px;
+                margin: 10px;
             }
 
             .file-hero {
                 width: 188px;
                 height: 118px;
-                margin-bottom: 16px;
+                margin-bottom: 10px;
             }
 
             .file-card {
@@ -344,6 +405,44 @@
 
             .file-card.doc {
                 right: 22px;
+            }
+
+            @keyframes pdf-clap {
+                0%,
+                100% {
+                    transform: rotate(-30deg);
+                }
+
+                36% {
+                    transform: translateX(-14px) translateY(-1px) rotate(-34deg);
+                }
+
+                58% {
+                    transform: translateX(7px) rotate(-24deg);
+                }
+
+                72% {
+                    transform: translateX(-2px) rotate(-32deg);
+                }
+            }
+
+            @keyframes doc-clap {
+                0%,
+                100% {
+                    transform: rotate(30deg);
+                }
+
+                36% {
+                    transform: translateX(14px) translateY(-1px) rotate(34deg);
+                }
+
+                58% {
+                    transform: translateX(-7px) rotate(24deg);
+                }
+
+                72% {
+                    transform: translateX(2px) rotate(32deg);
+                }
             }
 
             h1 {
@@ -365,6 +464,13 @@
 
             .message {
                 text-align: left;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .drop-zone:hover .file-card.pdf,
+            .drop-zone:hover .file-card.doc {
+                animation: none;
             }
         }
     </style>
