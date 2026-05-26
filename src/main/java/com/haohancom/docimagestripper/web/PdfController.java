@@ -6,8 +6,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import com.haohancom.docimagestripper.service.DocumentProcessingResult;
+import com.haohancom.docimagestripper.service.ExtractedImage;
 import com.haohancom.docimagestripper.service.PdfImagePlaceholderService;
-import com.haohancom.docimagestripper.service.PdfImagePlaceholderService.ExtractedImage;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -39,7 +40,7 @@ public class PdfController {
             @RequestParam(value = "placeholderSuffix", required = false) String placeholderSuffix) throws IOException {
         validatePdf(file);
 
-        PdfImagePlaceholderService.Result result = service.replaceImages(file.getBytes(),
+        DocumentProcessingResult result = service.replaceImages(file.getBytes(),
                 placeholderPart(placeholderPrefix), placeholderPart(placeholderSuffix));
         String pdfFileName = pdfOutputFileName(file.getOriginalFilename());
         String zipFileName = zipOutputFileName(file.getOriginalFilename());
@@ -85,11 +86,11 @@ public class PdfController {
         return value == null ? "" : value;
     }
 
-    private byte[] toZip(PdfImagePlaceholderService.Result result, String pdfFileName) throws IOException {
+    private byte[] toZip(DocumentProcessingResult result, String pdfFileName) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(output)) {
             zip.putNextEntry(new ZipEntry(pdfFileName));
-            zip.write(result.getPdfBytes());
+            zip.write(result.getDocumentBytes());
             zip.closeEntry();
 
             for (ExtractedImage image : result.getExtractedImages()) {

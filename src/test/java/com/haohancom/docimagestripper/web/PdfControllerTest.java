@@ -17,6 +17,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import com.haohancom.docimagestripper.service.DocumentProcessingResult;
+import com.haohancom.docimagestripper.service.ExtractedImage;
 import com.haohancom.docimagestripper.service.PdfImagePlaceholderService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,10 +43,10 @@ class PdfControllerTest {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
         byte[] image = new byte[] {(byte) 0x89, 'P', 'N', 'G'};
         given(service.replaceImages(any(byte[].class), any(String.class), any(String.class)))
-                .willReturn(new PdfImagePlaceholderService.Result(
+                .willReturn(new DocumentProcessingResult(
                 processedPdf,
                 java.util.Collections.singletonList(
-                        new PdfImagePlaceholderService.ExtractedImage("image1.png", "image/png", image))));
+                        new ExtractedImage("image1.png", "image/png", image))));
         MockMultipartFile file = new MockMultipartFile(
                 "file",
                 "sample.pdf",
@@ -70,7 +72,7 @@ class PdfControllerTest {
     void passesCustomPlaceholderDelimitersToPdfService() throws Exception {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
         given(service.replaceImages(any(byte[].class), any(String.class), any(String.class)))
-                .willReturn(new PdfImagePlaceholderService.Result(
+                .willReturn(new DocumentProcessingResult(
                         processedPdf,
                         java.util.Collections.emptyList()));
         MockMultipartFile file = new MockMultipartFile(
@@ -92,7 +94,7 @@ class PdfControllerTest {
     void allowsUploadsFromDoubleClickedStaticPage() throws Exception {
         byte[] processedPdf = "%PDF-1.4\n%EOF".getBytes(StandardCharsets.US_ASCII);
         given(service.replaceImages(any(byte[].class), any(String.class), any(String.class)))
-                .willReturn(new PdfImagePlaceholderService.Result(
+                .willReturn(new DocumentProcessingResult(
                 processedPdf,
                 java.util.Collections.emptyList()));
         MockMultipartFile file = new MockMultipartFile(
