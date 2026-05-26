@@ -6,8 +6,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
+import com.haohancom.docimagestripper.service.DocumentProcessingResult;
+import com.haohancom.docimagestripper.service.ExtractedImage;
 import com.haohancom.docimagestripper.service.PdfImagePlaceholderService;
-import com.haohancom.docimagestripper.service.PdfImagePlaceholderService.ExtractedImage;
+import com.haohancom.docimagestripper.service.WordImagePlaceholderService;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
@@ -27,9 +29,11 @@ import org.springframework.web.multipart.MultipartFile;
 public class PdfController {
 
     private final PdfImagePlaceholderService service;
+    private final WordImagePlaceholderService wordService;
 
-    public PdfController(PdfImagePlaceholderService service) {
+    public PdfController(PdfImagePlaceholderService service, WordImagePlaceholderService wordService) {
         this.service = service;
+        this.wordService = wordService;
     }
 
     @PostMapping(value = "/replace-images", consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
@@ -37,13 +41,21 @@ public class PdfController {
     public ResponseEntity<byte[]> replaceImages(@RequestParam("file") MultipartFile file,
             @RequestParam(value = "placeholderPrefix", required = false) String placeholderPrefix,
             @RequestParam(value = "placeholderSuffix", required = false) String placeholderSuffix) throws IOException {
-        validatePdf(file);
+        DocumentUploadType uploadType = validateDocument(file);
 
-        PdfImagePlaceholderService.Result result = service.replaceImages(file.getBytes(),
-                placeholderPart(placeholderPrefix), placeholderPart(placeholderSuffix));
-        String pdfFileName = pdfOutputFileName(file.getOriginalFilename());
+        DocumentProcessingResult result;
+        if (uploadType == DocumentUploadType.PDF) {
+            result = service.replaceImages(file.getBytes(),
+                    placeholderPart(placeholderPrefix), placeholderPart(placeholderSuffix));
+        } else if (uploadType == DocumentUploadType.MODERN_WORD) {
+            result = wordService.replaceImages(file.getBytes(),
+                    placeholderPart(placeholderPrefix), placeholderPart(placeholderSuffix));
+        } else {
+            throw new UnsupportedWordFormatException("Please save this Word file as .docx and upload it again.");
+        }
+        String documentFileName = documentOutputFileName(file.getOriginalFilename());
         String zipFileName = zipOutputFileName(file.getOriginalFilename());
-        byte[] zipBytes = toZip(result, pdfFileName);
+        byte[] zipBytes = toZip(result, documentFileName);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("application/zip"))
@@ -62,34 +74,35 @@ public class PdfController {
     }
 
     @ExceptionHandler(IOException.class)
-    public ResponseEntity<String> pdfProcessingFailed(IOException exception) {
+    public ResponseEntity<String> documentProcessingFailed(IOException exception) {
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
                 .contentType(MediaType.TEXT_PLAIN)
-                .body("PDF processing failed: " + exception.getMessage());
+                .body("Document processing failed: " + exception.getMessage());
     }
 
-    private void validatePdf(MultipartFile file) {
+    @ExceptionHandler(UnsupportedWordFormatException.class)
+    public ResponseEntity<String> unsupportedWordFormat(UnsupportedWordFormatException exception) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(exception.getMessage());
+    }
+
+    private DocumentUploadType validateDocument(MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            throw new IllegalArgumentException("Please upload a PDF file.");
+            throw new IllegalArgumentException("Please upload a PDF or Word file.");
         }
-        String filename = file.getOriginalFilename();
-        String contentType = file.getContentType();
-        boolean hasPdfExtension = filename != null && filename.toLowerCase().endsWith(".pdf");
-        boolean hasPdfContentType = MediaType.APPLICATION_PDF_VALUE.equalsIgnoreCase(contentType);
-        if (!hasPdfExtension && !hasPdfContentType) {
-            throw new IllegalArgumentException("Only PDF files are supported.");
-        }
+        return DocumentUploadType.fromFilename(file.getOriginalFilename());
     }
 
     private String placeholderPart(String value) {
         return value == null ? "" : value;
     }
 
-    private byte[] toZip(PdfImagePlaceholderService.Result result, String pdfFileName) throws IOException {
+    private byte[] toZip(DocumentProcessingResult result, String documentFileName) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(output)) {
-            zip.putNextEntry(new ZipEntry(pdfFileName));
-            zip.write(result.getPdfBytes());
+            zip.putNextEntry(new ZipEntry(documentFileName));
+            zip.write(result.getDocumentBytes());
             zip.closeEntry();
 
             for (ExtractedImage image : result.getExtractedImages()) {
@@ -101,25 +114,33 @@ public class PdfController {
         return output.toByteArray();
     }
 
-    private String pdfOutputFileName(String originalFilename) {
-        String filename = originalFilename == null || originalFilename.trim().isEmpty()
-                ? "converted.pdf"
-                : originalFilename.trim();
-        int extensionIndex = filename.toLowerCase().lastIndexOf(".pdf");
+    private String documentOutputFileName(String originalFilename) {
+        String filename = normalizedFilename(originalFilename);
+        int extensionIndex = filename.lastIndexOf('.');
         if (extensionIndex > 0) {
-            return filename.substring(0, extensionIndex) + "-replaced.pdf";
+            return filename.substring(0, extensionIndex) + "-replaced" + filename.substring(extensionIndex);
         }
-        return filename + "-replaced.pdf";
+        return filename + "-replaced";
     }
 
     private String zipOutputFileName(String originalFilename) {
-        String filename = originalFilename == null || originalFilename.trim().isEmpty()
-                ? "converted.pdf"
-                : originalFilename.trim();
-        int extensionIndex = filename.toLowerCase().lastIndexOf(".pdf");
+        String filename = normalizedFilename(originalFilename);
+        int extensionIndex = filename.lastIndexOf('.');
         if (extensionIndex > 0) {
             return filename.substring(0, extensionIndex) + "-replaced.zip";
         }
         return filename + "-replaced.zip";
+    }
+
+    private String normalizedFilename(String originalFilename) {
+        return originalFilename == null || originalFilename.trim().isEmpty()
+                ? "converted"
+                : originalFilename.trim();
+    }
+
+    private static class UnsupportedWordFormatException extends RuntimeException {
+        UnsupportedWordFormatException(String message) {
+            super(message);
+        }
     }
 }

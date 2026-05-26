@@ -53,11 +53,12 @@ public class PdfImagePlaceholderService {
     private static final float PLACEHOLDER_FONT_SIZE = 18f;
     private static final float MAX_BORDER_PADDING = 8f;
 
-    public Result replaceImages(byte[] input) throws IOException {
+    public DocumentProcessingResult replaceImages(byte[] input) throws IOException {
         return replaceImages(input, "", "");
     }
 
-    public Result replaceImages(byte[] input, String placeholderPrefix, String placeholderSuffix) throws IOException {
+    public DocumentProcessingResult replaceImages(byte[] input, String placeholderPrefix, String placeholderSuffix)
+            throws IOException {
         if (input == null || input.length == 0) {
             throw new IllegalArgumentException("PDF file must not be empty.");
         }
@@ -87,7 +88,7 @@ public class PdfImagePlaceholderService {
 
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             document.save(output);
-            return new Result(output.toByteArray(), extractedImages);
+            return new DocumentProcessingResult(output.toByteArray(), extractedImages);
         }
     }
 
@@ -505,48 +506,6 @@ public class PdfImagePlaceholderService {
                     Math.max(1f, maxX - minX),
                     Math.max(1f, maxY - minY));
             return placeholder;
-        }
-    }
-
-    public static class Result {
-        private final byte[] pdfBytes;
-        private final List<ExtractedImage> extractedImages;
-
-        public Result(byte[] pdfBytes, List<ExtractedImage> extractedImages) {
-            this.pdfBytes = Arrays.copyOf(pdfBytes, pdfBytes.length);
-            this.extractedImages = Collections.unmodifiableList(new ArrayList<ExtractedImage>(extractedImages));
-        }
-
-        public byte[] getPdfBytes() {
-            return Arrays.copyOf(pdfBytes, pdfBytes.length);
-        }
-
-        public List<ExtractedImage> getExtractedImages() {
-            return extractedImages;
-        }
-    }
-
-    public static class ExtractedImage {
-        private final String filename;
-        private final String contentType;
-        private final byte[] bytes;
-
-        public ExtractedImage(String filename, String contentType, byte[] bytes) {
-            this.filename = filename;
-            this.contentType = contentType;
-            this.bytes = Arrays.copyOf(bytes, bytes.length);
-        }
-
-        public String getFilename() {
-            return filename;
-        }
-
-        public String getContentType() {
-            return contentType;
-        }
-
-        public byte[] getBytes() {
-            return Arrays.copyOf(bytes, bytes.length);
         }
     }
 

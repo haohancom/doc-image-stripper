@@ -296,12 +296,12 @@
     </header>
 
     <main>
-        <section class="uploader" aria-label="PDF 上传">
+        <section class="uploader" aria-label="PDF / Word 上传">
             <div class="drop-zone" id="dropZone" role="button" tabindex="0">
                 <div class="drop-content">
-                    <div class="file-mark">PDF</div>
-                    <h1>把 PDF 丢进来</h1>
-                    <p class="hint">图片会变成 image1、image2，并随 PDF 一起打包下载。</p>
+                    <div class="file-mark">DOC</div>
+                    <h1>把 PDF / Word 丢进来</h1>
+                    <p class="hint">图片会变成 image1、image2，并随处理后的文档一起打包下载。</p>
                     <div class="placeholder-row" aria-label="占位符设置">
                         <label class="placeholder-field" for="placeholderPrefix">
                             <span>左侧占位符</span>
@@ -315,7 +315,7 @@
                         </label>
                     </div>
                     <div class="button-row">
-                        <button class="primary" type="button" id="pickButton">选择 PDF</button>
+                        <button class="primary" type="button" id="pickButton">选择文档</button>
                         <button class="secondary" type="button" id="downloadButton" disabled>重新下载</button>
                     </div>
                 </div>
@@ -329,7 +329,7 @@
     </main>
 </div>
 
-<input id="fileInput" type="file" accept="application/pdf,.pdf">
+<input id="fileInput" type="file" accept=".pdf,.doc,.dot,.wbk,.docx,.docm,.dotx,.dotm,.docb">
 
 <script>
     const dropZone = document.getElementById('dropZone');
@@ -343,6 +343,7 @@
     const state = document.getElementById('state');
 
     const API_BASE = window.location.protocol === 'file:' ? 'http://localhost:8080' : '';
+    const SUPPORTED_EXTENSIONS = ['.pdf', '.doc', '.dot', '.wbk', '.docx', '.docm', '.dotx', '.dotm', '.docb'];
 
     let lastDownloadUrl = '';
     let lastDownloadName = '';
@@ -375,7 +376,8 @@
         if (plainMatch) {
             return plainMatch[1];
         }
-        return fallbackName.replace(/\.pdf$/i, '') + '-replaced.zip';
+        const extensionIndex = fallbackName.lastIndexOf('.');
+        return (extensionIndex > 0 ? fallbackName.substring(0, extensionIndex) : fallbackName) + '-replaced.zip';
     };
 
     const triggerDownload = (url, name) => {
@@ -391,8 +393,8 @@
         if (!file) {
             return;
         }
-        if (!file.name.toLowerCase().endsWith('.pdf')) {
-            setMessage('只支持 PDF 文件', true);
+        if (!isSupportedFile(file)) {
+            setMessage('只支持 PDF / Word 文件', true);
             return;
         }
 
@@ -452,8 +454,11 @@
         }
     };
 
-    const firstPdfOrFirstFile = (files) => Array.from(files || [])
-            .find((file) => file.name.toLowerCase().endsWith('.pdf')) || (files && files[0]);
+    const isSupportedFile = (file) => file && SUPPORTED_EXTENSIONS
+            .some((extension) => file.name.toLowerCase().endsWith(extension));
+
+    const firstSupportedFile = (files) => Array.from(files || [])
+            .find(isSupportedFile) || (files && files[0]);
 
     const showDragReady = (event) => {
         preventWindowFileDrop(event);
@@ -477,7 +482,7 @@
     const handleDrop = (event) => {
         preventWindowFileDrop(event);
         dropZone.classList.remove('is-over');
-        upload(firstPdfOrFirstFile(event.dataTransfer.files));
+        upload(firstSupportedFile(event.dataTransfer.files));
     };
 
     document.addEventListener('dragover', preventWindowFileDrop);
