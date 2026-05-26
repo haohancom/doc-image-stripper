@@ -6,6 +6,7 @@ import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.pdfbox.contentstream.PDContentStream;
@@ -147,6 +148,20 @@ class PdfImagePlaceholderServiceTest {
             assertThat(text).contains("[image1]");
             assertThat(countImageDraws(document.getPage(0))).isZero();
             assertThat(countStrokedRectangles(document.getPage(0), 0, 0, 80, 50)).isZero();
+        }
+    }
+
+    @Test
+    void drawsAllPlaceholdersWithWordSmallTwoFontSize() throws Exception {
+        byte[] input = createPdfWithDifferentSizedImages();
+
+        PdfImagePlaceholderService.Result result = service.replaceImages(input);
+
+        try (PDDocument document = PDDocument.load(result.getPdfBytes())) {
+            String text = new PDFTextStripper().getText(document);
+            assertThat(text).contains("[image1]");
+            assertThat(text).contains("[image2]");
+            assertThat(fontSizes(document.getPage(0))).containsExactly(18f, 18f);
         }
     }
 
@@ -365,6 +380,25 @@ class PdfImagePlaceholderServiceTest {
         }
     }
 
+    private byte[] createPdfWithDifferentSizedImages() throws Exception {
+        try (PDDocument document = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            document.addPage(page);
+
+            PDImageXObject firstImage = LosslessFactory.createFromImage(document, solidImage(20, 20, Color.RED));
+            PDImageXObject secondImage = LosslessFactory.createFromImage(document, solidImage(20, 20, Color.BLUE));
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.drawImage(firstImage, 72, 620, 160, 30);
+                content.drawImage(secondImage, 72, 500, 160, 100);
+            }
+
+            ByteArrayOutputStream output = new ByteArrayOutputStream();
+            document.save(output);
+            return output.toByteArray();
+        }
+    }
+
     private PDFormXObject createImageForm(PDDocument document, Color color) throws Exception {
         PDImageXObject image = LosslessFactory.createFromImage(document, solidImage(80, 50, color));
         PDFormXObject form = new PDFormXObject(document);
@@ -413,6 +447,21 @@ class PdfImagePlaceholderServiceTest {
             }
         }
         return imageDraws;
+    }
+
+    private List<Float> fontSizes(PDContentStream contentStream) throws Exception {
+        PDFStreamParser parser = new PDFStreamParser(contentStream);
+        parser.parse();
+        List<Object> tokens = parser.getTokens();
+        List<Float> sizes = new ArrayList<Float>();
+        for (int i = 2; i < tokens.size(); i++) {
+            Object token = tokens.get(i);
+            if (token instanceof Operator && OperatorName.SET_FONT_AND_SIZE.equals(((Operator) token).getName())
+                    && tokens.get(i - 1) instanceof COSNumber) {
+                sizes.add(Float.valueOf(((COSNumber) tokens.get(i - 1)).floatValue()));
+            }
+        }
+        return sizes;
     }
 
     private int countStrokedRectangles(PDContentStream contentStream, float x, float y, float width, float height)

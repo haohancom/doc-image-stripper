@@ -50,8 +50,7 @@ import org.springframework.stereotype.Service;
 public class PdfImagePlaceholderService {
 
     private static final PDFont PLACEHOLDER_FONT = PDType1Font.HELVETICA_BOLD;
-    private static final float MAX_FONT_SIZE = 14f;
-    private static final float MIN_FONT_SIZE = 4f;
+    private static final float PLACEHOLDER_FONT_SIZE = 18f;
     private static final float MAX_BORDER_PADDING = 8f;
 
     public Result replaceImages(byte[] input) throws IOException {
@@ -378,24 +377,15 @@ public class PdfImagePlaceholderService {
     }
 
     private void drawPlaceholder(PDPageContentStream content, ImagePlaceholder placeholder) throws IOException {
-        float fontSize = chooseFontSize(placeholder);
-        float textWidth = textWidth(placeholder.getLabel(), fontSize);
+        float textWidth = textWidth(placeholder.getLabel(), PLACEHOLDER_FONT_SIZE);
         float x = placeholder.getX() + Math.max(0, (placeholder.getWidth() - textWidth) / 2f);
-        float y = placeholder.getY() + Math.max(0, (placeholder.getHeight() - fontSize) / 2f);
+        float y = placeholder.getY() + Math.max(0, (placeholder.getHeight() - PLACEHOLDER_FONT_SIZE) / 2f);
 
         content.beginText();
-        content.setFont(PLACEHOLDER_FONT, fontSize);
+        content.setFont(PLACEHOLDER_FONT, PLACEHOLDER_FONT_SIZE);
         content.newLineAtOffset(x, y);
         content.showText(placeholder.getLabel());
         content.endText();
-    }
-
-    private float chooseFontSize(ImagePlaceholder placeholder) throws IOException {
-        float size = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, placeholder.getHeight() * 0.35f));
-        while (size > MIN_FONT_SIZE && textWidth(placeholder.getLabel(), size) > placeholder.getWidth() * 0.9f) {
-            size -= 0.5f;
-        }
-        return Math.max(MIN_FONT_SIZE, size);
     }
 
     private float textWidth(String text, float fontSize) throws IOException {
