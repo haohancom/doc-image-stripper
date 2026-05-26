@@ -182,11 +182,16 @@
             flex-wrap: wrap;
         }
 
+        .placeholder-block {
+            display: grid;
+            gap: 10px;
+            margin: 0 0 20px;
+        }
+
         .placeholder-row {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 12px;
-            margin: 0 0 20px;
             text-align: left;
         }
 
@@ -212,6 +217,32 @@
         .placeholder-field input:focus {
             outline: 3px solid rgba(15, 123, 104, 0.18);
             border-color: var(--accent);
+        }
+
+        .placeholder-preview {
+            min-height: 48px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            background: #f3faf7;
+            font-size: 20px;
+            font-weight: 800;
+            letter-spacing: 0;
+            overflow-wrap: anywhere;
+        }
+
+        .preview-prefix {
+            color: #c9483d;
+        }
+
+        .preview-image {
+            color: var(--ink);
+        }
+
+        .preview-suffix {
+            color: #1670a8;
         }
 
         button {
@@ -328,6 +359,10 @@
                 grid-template-columns: 1fr;
             }
 
+            .placeholder-preview {
+                font-size: 18px;
+            }
+
             .message {
                 text-align: left;
             }
@@ -351,17 +386,24 @@
                     </div>
                     <h1>把 PDF / Word 丢进来</h1>
                     <p class="hint">图片会变成 image1、image2，并随处理后的文档一起打包下载。</p>
-                    <div class="placeholder-row" aria-label="占位符设置">
-                        <label class="placeholder-field" for="placeholderPrefix">
-                            <span>左侧占位符</span>
-                            <input type="text" id="placeholderPrefix" name="placeholderPrefix" autocomplete="off"
-                                   placeholder="例如 -">
-                        </label>
-                        <label class="placeholder-field" for="placeholderSuffix">
-                            <span>右侧占位符</span>
-                            <input type="text" id="placeholderSuffix" name="placeholderSuffix" autocomplete="off"
-                                   placeholder="例如 !">
-                        </label>
+                    <div class="placeholder-block" aria-label="占位符设置">
+                        <div class="placeholder-row">
+                            <label class="placeholder-field" for="placeholderPrefix">
+                                <span>左侧占位符</span>
+                                <input type="text" id="placeholderPrefix" name="placeholderPrefix" autocomplete="off"
+                                       placeholder="例如 [">
+                            </label>
+                            <label class="placeholder-field" for="placeholderSuffix">
+                                <span>右侧占位符</span>
+                                <input type="text" id="placeholderSuffix" name="placeholderSuffix" autocomplete="off"
+                                       placeholder="例如 ]">
+                            </label>
+                        </div>
+                        <div class="placeholder-preview" aria-live="polite">
+                            <span class="preview-prefix" id="previewPrefix"></span><span
+                                class="preview-image">image</span><span class="preview-suffix"
+                                id="previewSuffix"></span>
+                        </div>
                     </div>
                     <div class="button-row">
                         <button class="primary" type="button" id="pickButton">选择文档</button>
@@ -387,6 +429,8 @@
     const downloadButton = document.getElementById('downloadButton');
     const placeholderPrefix = document.getElementById('placeholderPrefix');
     const placeholderSuffix = document.getElementById('placeholderSuffix');
+    const previewPrefix = document.getElementById('previewPrefix');
+    const previewSuffix = document.getElementById('previewSuffix');
     const filename = document.getElementById('filename');
     const message = document.getElementById('message');
     const state = document.getElementById('state');
@@ -411,6 +455,11 @@
         message.textContent = text;
         message.classList.toggle('error', isError);
         message.classList.toggle('success', isSuccess);
+    };
+
+    const updatePlaceholderPreview = () => {
+        previewPrefix.textContent = placeholderPrefix.value;
+        previewSuffix.textContent = placeholderSuffix.value;
     };
 
     const openPicker = () => fileInput.click();
@@ -556,6 +605,9 @@
         }
     });
     fileInput.addEventListener('change', () => upload(fileInput.files[0]));
+    placeholderPrefix.addEventListener('input', updatePlaceholderPreview);
+    placeholderSuffix.addEventListener('input', updatePlaceholderPreview);
+    updatePlaceholderPreview();
 
     downloadButton.addEventListener('click', (event) => {
         event.stopPropagation();
