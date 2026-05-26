@@ -33,6 +33,16 @@ class StaticPageTest {
         assertThat(html).contains("window.location.protocol === 'file:' ? 'http://localhost:8080' : ''");
         assertThat(html).contains("id=\"placeholderPrefix\"");
         assertThat(html).contains("id=\"placeholderSuffix\"");
+        assertThat(html).contains("placeholder=\"例如 [\"");
+        assertThat(html).contains("placeholder=\"例如 ]\"");
+        assertThat(html).contains("class=\"placeholder-preview\"");
+        assertThat(html).contains("class=\"preview-prefix\"");
+        assertThat(html).contains("class=\"preview-image\">image</span>");
+        assertThat(html).contains("class=\"preview-suffix\"");
+        assertThat(html).contains("previewPrefix.textContent = placeholderPrefix.value");
+        assertThat(html).contains("previewSuffix.textContent = placeholderSuffix.value");
+        assertThat(html).contains("placeholderPrefix.addEventListener('input', updatePlaceholderPreview)");
+        assertThat(html).contains("placeholderSuffix.addEventListener('input', updatePlaceholderPreview)");
         assertThat(html).contains("formData.append('placeholderPrefix'");
         assertThat(html).contains("formData.append('placeholderSuffix'");
         assertThat(html).contains("fetch(API_BASE + '/api/pdf/replace-images'");
