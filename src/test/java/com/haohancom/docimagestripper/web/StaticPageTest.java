@@ -21,6 +21,12 @@ class StaticPageTest {
         assertThat(html).contains("处理完成，已下载");
         assertThat(html).contains("PDF / Word 上传");
         assertThat(html).contains("PDF / Word");
+        assertThat(html).contains("class=\"file-hero\"");
+        assertThat(html).contains("class=\"file-card pdf\"");
+        assertThat(html).contains("class=\"file-card doc\"");
+        assertThat(html).contains("transform: rotate(-30deg)");
+        assertThat(html).contains("transform: rotate(30deg)");
+        assertThat(html).doesNotContain("class=\"file-mark\"");
         assertThat(html).contains("accept=\".pdf,.doc,.dot,.wbk,.docx,.docm,.dotx,.dotm,.docb\"");
         assertThat(html).contains("const SUPPORTED_EXTENSIONS = ['.pdf', '.doc', '.dot', '.wbk', '.docx', '.docm', '.dotx', '.dotm', '.docb']");
         assertThat(html).contains("firstSupportedFile");

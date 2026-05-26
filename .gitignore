@@ -1,6 +1,7 @@
 target/
 dist/
 .worktrees/
+.superpowers/
 
 .DS_Store
 
